@@ -1413,8 +1413,8 @@ type MotionBody = {
   rotation: number
 }
 
-const motionBallSize = 82
-const motionHoleSize = 96
+const motionBallSize = 72
+const motionHoleSize = 90
 const motionTiltStrength = 980
 const motionFallbackStrength = 820
 const motionFriction = 0.91
@@ -1422,9 +1422,12 @@ const motionMaxSpeed = 620
 const motionDeadZone = 1.8
 const motionWinSpeed = 135
 const motionObstacles = [
-  { x: 0.12, y: 0.25, width: 0.54, height: 0.035 },
-  { x: 0.34, y: 0.42, width: 0.54, height: 0.035 },
-  { x: 0.1, y: 0.6, width: 0.5, height: 0.035 },
+  { x: 0.08, y: 0.2, width: 0.34, height: 0.024 },
+  { x: 0.56, y: 0.3, width: 0.36, height: 0.024 },
+  { x: 0.16, y: 0.4, width: 0.4, height: 0.024 },
+  { x: 0.62, y: 0.51, width: 0.3, height: 0.024 },
+  { x: 0.08, y: 0.62, width: 0.36, height: 0.024 },
+  { x: 0.5, y: 0.71, width: 0.28, height: 0.024 },
 ]
 
 function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
@@ -1769,9 +1772,12 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
               ref={boardRef}
               onPointerDown={handlePointerMove}
               onPointerMove={handlePointerMove}
-              className="motion-board relative min-h-[56dvh] flex-1 overflow-hidden border border-terminal-500/30 bg-flossa-black/78 shadow-[0_0_46px_rgb(57_255_20_/_0.12)]"
+              className="motion-board relative min-h-[64dvh] flex-1 overflow-hidden border border-terminal-500/30 bg-flossa-black/78 shadow-[0_0_46px_rgb(57_255_20_/_0.12)]"
             >
-              <div className="motion-hole absolute left-1/2 top-[82%] h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full" />
+              <div
+                className="motion-hole absolute left-1/2 top-[82%] -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{ height: `${motionHoleSize}px`, width: `${motionHoleSize}px` }}
+              />
 
               {motionObstacles.map((obstacle, index) => (
                 <div
@@ -1790,13 +1796,15 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
                 src={ownerBallImage}
                 alt="Repository core ball"
                 draggable={false}
-                className={`motion-ball absolute h-[82px] w-[82px] select-none rounded-full object-cover ${
+                className={`motion-ball absolute select-none rounded-full object-cover ${
                   mode === 'complete' ? 'motion-ball-complete' : ''
                 }`}
                 style={{
+                  height: `${motionBallSize}px`,
                   left: `${ball.x - motionBallSize / 2}px`,
                   top: `${ball.y - motionBallSize / 2}px`,
                   transform: `rotate(${ball.rotation}deg) scale(${ballScale})`,
+                  width: `${motionBallSize}px`,
                 }}
               />
             </div>
