@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { registerSW } from 'virtual:pwa-register'
 import secureMessageAudio from '../assets/secure-message.mp3'
+import papalUnlockAudio from '../assets/papal-unlock.mp3'
 import ownerImage from '../assets/owner.png'
+import popeImage from '../assets/pope.png'
 
 type SystemSound = 'beep' | 'click' | 'success' | 'error'
 type ProtocolStatus = 'idle' | 'error' | 'validating' | 'verified' | 'success'
@@ -48,7 +50,7 @@ const savedScreenKey = 'git-recovery-screen'
 const savedProgressKey = 'git-recovery-progress'
 const savedTimeLeftKey = 'git-recovery-time-left'
 const savedDeadlineKey = 'git-recovery-deadline-at'
-const secureMessageStorageKey = 'git-recovery-secure-message-listened'
+const secureMessageStorageKey = 'git-recovery-secure-message-listened-v2'
 const appScreens: AppScreen[] = [
   'start',
   'loading',
@@ -62,17 +64,16 @@ const appScreens: AppScreen[] = [
   'protocol-06',
   'success',
 ]
-const secureMessageTranscript = [
-  'Paweł Werda.',
-  'Jeżeli słyszysz tę wiadomość, procedura odzyskiwania została uruchomiona prawidłowo.',
-  'Repozytorium przypisane do Twojej tożsamości zostało uszkodzone. Część danych utracono, a dostęp do Vault 404 pozostaje zablokowany.',
-  'System przygotował sześć protokołów odzyskiwania. Każdy z nich zweryfikuje inny fragment danych.',
-  'Nie wszystkie informacje znajdują się w aplikacji. Obserwuj otoczenie. Korzystaj z przedmiotów, które otrzymałeś. Słuchaj uważnie.',
-  'Po rozpoczęciu procedury nie będzie możliwości powrotu.',
-  'Kiedy będziesz gotowy, rozpocznij identyfikację repozytorium.',
-]
-
 let audioContext: AudioContext | null = null
+let ambientNodes:
+  | {
+      oscillator: OscillatorNode
+      modulator: OscillatorNode
+      modulatorGain: GainNode
+      filter: BiquadFilterNode
+      gain: GainNode
+    }
+  | null = null
 
 function loadSavedScreen() {
   const savedScreen = window.localStorage.getItem(savedScreenKey)
@@ -112,6 +113,46 @@ function getAudioContext() {
   return audioContext
 }
 
+function startAmbientSound() {
+  try {
+    if (ambientNodes) {
+      void getAudioContext().resume()
+      return
+    }
+
+    const context = getAudioContext()
+    void context.resume()
+
+    const oscillator = context.createOscillator()
+    const modulator = context.createOscillator()
+    const modulatorGain = context.createGain()
+    const filter = context.createBiquadFilter()
+    const gain = context.createGain()
+
+    oscillator.type = 'sawtooth'
+    oscillator.frequency.value = 48
+    modulator.type = 'sine'
+    modulator.frequency.value = 0.08
+    modulatorGain.gain.value = 9
+    filter.type = 'lowpass'
+    filter.frequency.value = 180
+    filter.Q.value = 4
+    gain.gain.value = 0.012
+
+    modulator.connect(modulatorGain)
+    modulatorGain.connect(oscillator.frequency)
+    oscillator.connect(filter)
+    filter.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start()
+    modulator.start()
+
+    ambientNodes = { oscillator, modulator, modulatorGain, filter, gain }
+  } catch {
+    // Background audio is optional and must never block the game flow.
+  }
+}
+
 function playTone(frequency: number, startAt: number, duration: number, volume = 0.035) {
   const context = getAudioContext()
   const oscillator = context.createOscillator()
@@ -133,6 +174,7 @@ function playSystemSound(sound: SystemSound) {
   try {
     const context = getAudioContext()
     void context.resume()
+    startAmbientSound()
     const now = context.currentTime
 
     if (sound === 'click') {
@@ -180,7 +222,11 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    void fetch(secureMessageAudio, { cache: 'force-cache' }).catch(() => undefined)
+    void Promise.all([
+      fetch(secureMessageAudio, { cache: 'force-cache' }),
+      fetch(papalUnlockAudio, { cache: 'force-cache' }),
+      fetch(popeImage, { cache: 'force-cache' }),
+    ]).catch(() => undefined)
   }, [])
 
   useEffect(() => {
@@ -489,6 +535,10 @@ function LoadingScreen({ onComplete }: { onComplete: () => void }) {
   }, [])
 
   useEffect(() => {
+    playSystemSound('beep')
+  }, [activeMessageIndex])
+
+  useEffect(() => {
     if (progress < 100) {
       return undefined
     }
@@ -550,6 +600,10 @@ function LoadingScreen({ onComplete }: { onComplete: () => void }) {
 function TransitionLoadingScreen({ nextScreen }: { nextScreen: AppScreen }) {
   const nextLabel = nextScreen === 'success' ? 'SUCCESS' : nextScreen.replace('-', ' ').toUpperCase()
 
+  useEffect(() => {
+    playSystemSound('beep')
+  }, [])
+
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-flossa-black px-5 pt-[calc(76px+env(safe-area-inset-top))] text-center text-flossa-white">
       <div className="loading-grid absolute inset-0 opacity-30" />
@@ -596,26 +650,16 @@ function completeValidation<TStatus extends ProtocolStatus | 'token'>(
 
 function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const unlockAudioRef = useRef<HTMLAudioElement | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [hasEnded, setHasEnded] = useState(() => {
     return window.localStorage.getItem(secureMessageStorageKey) === 'true'
   })
-  const [visibleTranscriptCount, setVisibleTranscriptCount] = useState(0)
-
-  useEffect(() => {
-    if (!isOpen) {
-      return undefined
-    }
-
-    const transcriptTimer = window.setInterval(() => {
-      setVisibleTranscriptCount((count) =>
-        Math.min(secureMessageTranscript.length, count + 1),
-      )
-    }, 1750)
-
-    return () => window.clearInterval(transcriptTimer)
-  }, [isOpen])
+  const [papalTapCount, setPapalTapCount] = useState(0)
+  const [isUnlockAudioPlaying, setIsUnlockAudioPlaying] = useState(false)
+  const [isPapalUnlocked, setIsPapalUnlocked] = useState(false)
+  const requiredPapalTaps = 10
 
   useEffect(() => {
     if (!isOpen) {
@@ -623,11 +667,17 @@ function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
     }
 
     const audioElement = audioRef.current
+    const unlockAudioElement = unlockAudioRef.current
 
     return () => {
       if (audioElement) {
         audioElement.pause()
         audioElement.currentTime = 0
+      }
+
+      if (unlockAudioElement) {
+        unlockAudioElement.pause()
+        unlockAudioElement.currentTime = 0
       }
     }
   }, [isOpen])
@@ -635,7 +685,6 @@ function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
   async function openMessage() {
     playSystemSound('beep')
     setIsOpen(true)
-    setVisibleTranscriptCount(1)
 
     await new Promise((resolve) => window.requestAnimationFrame(resolve))
 
@@ -672,13 +721,47 @@ function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
   function handleAudioEnded() {
     setIsPlaying(false)
     setHasEnded(true)
-    setVisibleTranscriptCount(secureMessageTranscript.length)
     window.localStorage.setItem(secureMessageStorageKey, 'true')
     playSystemSound('success')
   }
 
+  async function handlePapalTap() {
+    if (!hasEnded || isPapalUnlocked || isUnlockAudioPlaying) {
+      playSystemSound('error')
+      return
+    }
+
+    const nextTapCount = Math.min(requiredPapalTaps, papalTapCount + 1)
+    setPapalTapCount(nextTapCount)
+    playSystemSound(nextTapCount === requiredPapalTaps ? 'success' : 'click')
+    window.navigator.vibrate?.(nextTapCount === requiredPapalTaps ? [35, 25, 70] : 18)
+
+    if (nextTapCount !== requiredPapalTaps) {
+      return
+    }
+
+    if (!unlockAudioRef.current) {
+      setIsPapalUnlocked(true)
+      return
+    }
+
+    try {
+      unlockAudioRef.current.currentTime = 0
+      await unlockAudioRef.current.play()
+      setIsUnlockAudioPlaying(true)
+    } catch {
+      setIsPapalUnlocked(true)
+    }
+  }
+
+  function handleUnlockAudioEnded() {
+    setIsUnlockAudioPlaying(false)
+    setIsPapalUnlocked(true)
+    playSystemSound('success')
+  }
+
   function handleContinue() {
-    if (!hasEnded) {
+    if (!isPapalUnlocked) {
       playSystemSound('error')
       return
     }
@@ -686,6 +769,11 @@ function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
+    }
+
+    if (unlockAudioRef.current) {
+      unlockAudioRef.current.pause()
+      unlockAudioRef.current.currentTime = 0
     }
 
     playSystemSound('click')
@@ -705,6 +793,14 @@ function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
         onEnded={handleAudioEnded}
         onPause={() => setIsPlaying(false)}
         onPlay={() => setIsPlaying(true)}
+      />
+      <audio
+        ref={unlockAudioRef}
+        src={papalUnlockAudio}
+        preload="auto"
+        onEnded={handleUnlockAudioEnded}
+        onPause={() => setIsUnlockAudioPlaying(false)}
+        onPlay={() => setIsUnlockAudioPlaying(true)}
       />
 
       <section className="relative z-10 w-full max-w-[410px] animate-fade-up font-code uppercase">
@@ -739,7 +835,7 @@ function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
             </button>
           </div>
         ) : (
-          <div className="secure-message-open border border-terminal-500/35 bg-flossa-black/82 p-5 shadow-[0_0_46px_rgb(57_255_20_/_0.14)]">
+          <div className="secure-message-open border border-terminal-500/35 bg-flossa-black/82 p-4 shadow-[0_0_46px_rgb(57_255_20_/_0.14)]">
             <div className="mb-5 text-center">
               <p className="secure-decrypt-glitch text-xl font-semibold tracking-[0.16em] text-terminal-500">
                 MESSAGE DECRYPTED
@@ -749,18 +845,33 @@ function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
               </p>
             </div>
 
-            <div className="relative mb-5 overflow-hidden border border-terminal-500/20 bg-flossa-black/60 p-4">
-              <div className="secure-gif-sim absolute inset-0" />
-              <div className="relative z-10">
-                <p className="mb-4 text-center text-[10px] tracking-[0.24em] text-terminal-500/70">
+            <div className="relative mb-5 overflow-hidden border border-terminal-500/20 bg-flossa-black/60">
+              <button
+                type="button"
+                onClick={handlePapalTap}
+                disabled={!hasEnded || isPapalUnlocked || isUnlockAudioPlaying}
+                className="group relative block w-full overflow-hidden bg-flossa-black text-left focus:outline-none focus:ring-2 focus:ring-terminal-500 disabled:cursor-not-allowed"
+                aria-label="Tap the pope"
+              >
+                <img
+                  src={popeImage}
+                  alt="Pope in terminal code"
+                  className="secure-pope-image aspect-[1/1] w-full object-cover"
+                />
+                <span className="absolute inset-0 bg-gradient-to-b from-flossa-black/5 via-transparent to-flossa-black/62" />
+                <span className="absolute left-3 top-3 border border-terminal-500/35 bg-flossa-black/70 px-3 py-2 text-[10px] tracking-[0.2em] text-terminal-500/80">
                   {isPlaying ? 'TRANSMISSION ACTIVE' : 'TRANSMISSION STANDBY'}
-                </p>
-                <div className={`waveform ${isPlaying ? 'waveform-active' : ''}`}>
-                  {Array.from({ length: 18 }, (_, index) => (
-                    <span key={index} style={{ animationDelay: `${index * 55}ms` }} />
-                  ))}
-                </div>
-              </div>
+                </span>
+                {hasEnded ? (
+                  <span className="absolute bottom-3 left-3 right-3 border border-terminal-500/30 bg-flossa-black/75 px-3 py-2 text-center text-[10px] tracking-[0.16em] text-terminal-500">
+                    {isPapalUnlocked
+                      ? 'PAPAL OVERRIDE ACCEPTED'
+                      : isUnlockAudioPlaying
+                        ? 'CONFIRMING OVERRIDE...'
+                        : `TAP ${requiredPapalTaps - papalTapCount} MORE`}
+                  </span>
+                ) : null}
+              </button>
             </div>
 
             <div className="mb-5 grid grid-cols-2 gap-3">
@@ -781,18 +892,22 @@ function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
               </button>
             </div>
 
-            <div className="max-h-[34dvh] space-y-3 overflow-y-auto pr-1 text-[12px] normal-case leading-6 tracking-[0.02em] text-flossa-white/72">
-              {secureMessageTranscript.slice(0, visibleTranscriptCount).map((message) => (
-                <p key={message} className="animate-fade-up border-l border-terminal-500/35 pl-3">
-                  {message}
+            <div className="min-h-[76px] border border-terminal-500/20 bg-flossa-black/60 p-4 text-center text-[11px] leading-5 tracking-[0.14em] text-flossa-white/62">
+              {!hasEnded ? (
+                <p>Listen to the full transmission.</p>
+              ) : isPapalUnlocked ? (
+                <p className="text-terminal-500">Recovery gate unlocked.</p>
+              ) : (
+                <p className="animate-fade-up text-terminal-500">
+                  Tap the pope 10 times to unlock recovery.
                 </p>
-              ))}
+              )}
             </div>
 
             <button
               type="button"
               onClick={handleContinue}
-              disabled={!hasEnded}
+              disabled={!isPapalUnlocked}
               className="mt-6 h-14 w-full border border-terminal-500/55 bg-terminal-500 px-5 text-[12px] font-semibold tracking-[0.2em] text-flossa-black shadow-[0_0_34px_rgb(57_255_20_/_0.18)] transition duration-200 hover:bg-flossa-white focus:outline-none focus:ring-2 focus:ring-terminal-500 focus:ring-offset-2 focus:ring-offset-flossa-black active:scale-[0.98] disabled:cursor-not-allowed disabled:border-flossa-white/15 disabled:bg-flossa-graphite disabled:text-flossa-white/35 disabled:shadow-none disabled:hover:bg-flossa-graphite"
             >
               CONTINUE RECOVERY
@@ -1031,7 +1146,14 @@ function Protocol03Screen({ onSuccess }: { onSuccess: () => void }) {
             </p>
             <p className="mt-4 text-xs leading-6 tracking-[0.14em] text-terminal-500/80">
               Call<br />
-              732 128 058
+              <a
+                href="tel:+48732128058"
+                onClick={() => playSystemSound('click')}
+                className="inline-flex items-center gap-2 text-terminal-500 underline decoration-terminal-500/40 underline-offset-4"
+              >
+                732 128 058
+                <span className="text-[10px] tracking-[0.18em] text-flossa-white/52">kliknij</span>
+              </a>
             </p>
             <p className="terminal-type mt-4 max-w-max text-xs leading-6 tracking-[0.12em] text-flossa-white/72">
               Ask exactly one question.

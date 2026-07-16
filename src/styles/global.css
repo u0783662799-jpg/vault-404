@@ -323,6 +323,12 @@
     animation: secure-open 520ms ease-out both;
   }
 
+  .secure-pope-image {
+    filter: saturate(1.08) contrast(1.08) brightness(0.92);
+    transform: scale(1.01);
+    animation: secure-pope-glitch 2.8s steps(1, end) infinite;
+  }
+
   .secure-decrypt-glitch {
     animation: text-glitch 620ms steps(1, end) both;
     text-shadow: 0 0 22px rgb(57 255 20 / 0.38);
@@ -731,6 +737,30 @@
     opacity: 1;
     transform: rotateX(0) translate3d(0, 0, 0);
     filter: blur(0);
+  }
+}
+
+@keyframes secure-pope-glitch {
+  0%,
+  88%,
+  100% {
+    filter: saturate(1.08) contrast(1.08) brightness(0.92);
+    transform: translate3d(0, 0, 0) scale(1.01);
+  }
+
+  90% {
+    filter: saturate(1.22) contrast(1.16) brightness(0.98) hue-rotate(3deg);
+    transform: translate3d(1px, -1px, 0) scale(1.012);
+  }
+
+  92% {
+    filter: saturate(0.96) contrast(1.2) brightness(0.9) hue-rotate(-4deg);
+    transform: translate3d(-1px, 1px, 0) scale(1.01);
+  }
+
+  94% {
+    filter: saturate(1.12) contrast(1.1) brightness(0.94);
+    transform: translate3d(0, 0, 0) scale(1.01);
   }
 }
 
