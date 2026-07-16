@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent, type ReactNode } from 'react'
 import { registerSW } from 'virtual:pwa-register'
 import secureMessageAudio from '../assets/secure-message.mp3'
 import papalUnlockAudio from '../assets/papal-unlock.mp3'
 import ownerImage from '../assets/owner.png'
+import ownerBallImage from '../assets/owner-ball.png'
 import popeImage from '../assets/pope.png'
 
 type SystemSound = 'beep' | 'click' | 'success' | 'error'
@@ -17,6 +18,7 @@ type AppScreen =
   | 'protocol-02'
   | 'protocol-03'
   | 'protocol-04'
+  | 'motion-calibration'
   | 'protocol-05'
   | 'protocol-06'
   | 'success'
@@ -51,6 +53,7 @@ const savedProgressKey = 'git-recovery-progress'
 const savedTimeLeftKey = 'git-recovery-time-left'
 const savedDeadlineKey = 'git-recovery-deadline-at'
 const secureMessageStorageKey = 'git-recovery-secure-message-listened-v2'
+const motionCalibrationStorageKey = 'git-recovery-motion-calibration-complete'
 const appScreens: AppScreen[] = [
   'start',
   'loading',
@@ -60,6 +63,7 @@ const appScreens: AppScreen[] = [
   'protocol-02',
   'protocol-03',
   'protocol-04',
+  'motion-calibration',
   'protocol-05',
   'protocol-06',
   'success',
@@ -226,6 +230,7 @@ export function App() {
       fetch(secureMessageAudio, { cache: 'force-cache' }),
       fetch(papalUnlockAudio, { cache: 'force-cache' }),
       fetch(popeImage, { cache: 'force-cache' }),
+      fetch(ownerBallImage, { cache: 'force-cache' }),
     ]).catch(() => undefined)
   }, [])
 
@@ -315,6 +320,15 @@ export function App() {
         <Protocol04Screen
           onSuccess={() => {
             setRecoveryProgress(70)
+            continueWithLoading('motion-calibration')
+          }}
+        />
+      )
+    } else if (screen === 'motion-calibration') {
+      content = (
+        <MotionCalibrationScreen
+          onSuccess={() => {
+            window.localStorage.setItem(motionCalibrationStorageKey, 'true')
             continueWithLoading('protocol-05')
           }}
         />
@@ -1384,6 +1398,487 @@ function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
   )
 }
 
+type MotionMode = 'intro' | 'motion' | 'fallback' | 'complete'
+
+type MotionVector = {
+  x: number
+  y: number
+}
+
+type MotionBody = {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  rotation: number
+}
+
+const motionBallSize = 82
+const motionHoleSize = 96
+const motionTiltStrength = 980
+const motionFallbackStrength = 820
+const motionFriction = 0.91
+const motionMaxSpeed = 620
+const motionDeadZone = 1.8
+const motionWinSpeed = 135
+const motionObstacles = [
+  { x: 0.12, y: 0.25, width: 0.54, height: 0.035 },
+  { x: 0.34, y: 0.42, width: 0.54, height: 0.035 },
+  { x: 0.1, y: 0.6, width: 0.5, height: 0.035 },
+]
+
+function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
+  const boardRef = useRef<HTMLDivElement | null>(null)
+  const bodyRef = useRef<MotionBody>({ x: 0, y: 0, vx: 0, vy: 0, rotation: 0 })
+  const tiltRef = useRef<MotionVector>({ x: 0, y: 0 })
+  const fallbackVectorRef = useRef<MotionVector>({ x: 0, y: 0 })
+  const lastFrameRef = useRef<number | null>(null)
+  const hasOrientationEventRef = useRef(false)
+  const successTimerRef = useRef<number | null>(null)
+  const [mode, setMode] = useState<MotionMode>(() =>
+    window.localStorage.getItem(motionCalibrationStorageKey) === 'true' ? 'complete' : 'intro',
+  )
+  const [ball, setBall] = useState<MotionBody>({ x: 0, y: 0, vx: 0, vy: 0, rotation: 0 })
+  const [sensorMessage, setSensorMessage] = useState('')
+  const [showContinue, setShowContinue] = useState(
+    () => window.localStorage.getItem(motionCalibrationStorageKey) === 'true',
+  )
+  const isPlaying = mode === 'motion' || mode === 'fallback'
+
+  function getBoardMetrics() {
+    const board = boardRef.current
+
+    if (!board) {
+      return null
+    }
+
+    const rect = board.getBoundingClientRect()
+    return {
+      width: rect.width,
+      height: rect.height,
+      rect,
+      radius: motionBallSize / 2,
+      hole: {
+        x: rect.width * 0.5,
+        y: rect.height * 0.82,
+        radius: motionHoleSize / 2,
+      },
+    }
+  }
+
+  function resetBall() {
+    const metrics = getBoardMetrics()
+
+    if (!metrics) {
+      return
+    }
+
+    const nextBody = {
+      x: metrics.width * 0.5,
+      y: metrics.height * 0.16,
+      vx: 0,
+      vy: 0,
+      rotation: 0,
+    }
+
+    bodyRef.current = nextBody
+    setBall(nextBody)
+  }
+
+  async function beginCalibration() {
+    playSystemSound('click')
+    setSensorMessage('')
+    setShowContinue(false)
+    window.localStorage.removeItem(motionCalibrationStorageKey)
+
+    if (typeof DeviceOrientationEvent === 'undefined') {
+      setSensorMessage('MOTION SENSOR UNAVAILABLE')
+      setMode('fallback')
+      return
+    }
+
+    const orientationEvent = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+      requestPermission?: () => Promise<PermissionState>
+    }
+
+    if (typeof orientationEvent.requestPermission === 'function') {
+      try {
+        const permission = await orientationEvent.requestPermission()
+
+        if (permission !== 'granted') {
+          setSensorMessage('MOTION SENSOR UNAVAILABLE')
+          setMode('fallback')
+          return
+        }
+      } catch {
+        setSensorMessage('MOTION SENSOR UNAVAILABLE')
+        setMode('fallback')
+        return
+      }
+    }
+
+    hasOrientationEventRef.current = false
+    setMode('motion')
+    window.setTimeout(() => {
+      if (!hasOrientationEventRef.current && mode !== 'complete') {
+        setSensorMessage('MOTION SENSOR UNAVAILABLE')
+        setMode('fallback')
+      }
+    }, 1400)
+  }
+
+  function completeCalibration() {
+    if (mode === 'complete') {
+      return
+    }
+
+    playSystemSound('success')
+    window.navigator.vibrate?.([50, 30, 90])
+    window.localStorage.setItem(motionCalibrationStorageKey, 'true')
+    setMode('complete')
+
+    if (successTimerRef.current) {
+      window.clearTimeout(successTimerRef.current)
+    }
+
+    successTimerRef.current = window.setTimeout(() => setShowContinue(true), 1200)
+  }
+
+  function moveBody(deltaSeconds: number) {
+    const metrics = getBoardMetrics()
+
+    if (!metrics) {
+      return
+    }
+
+    const body = bodyRef.current
+    const control = mode === 'motion' ? tiltRef.current : fallbackVectorRef.current
+    const strength = mode === 'motion' ? motionTiltStrength : motionFallbackStrength
+    const obstacles = motionObstacles.map((obstacle) => ({
+      left: obstacle.x * metrics.width,
+      top: obstacle.y * metrics.height,
+      right: (obstacle.x + obstacle.width) * metrics.width,
+      bottom: (obstacle.y + obstacle.height) * metrics.height,
+    }))
+
+    body.vx += control.x * strength * deltaSeconds
+    body.vy += control.y * strength * deltaSeconds
+    body.vx *= Math.pow(motionFriction, deltaSeconds * 60)
+    body.vy *= Math.pow(motionFriction, deltaSeconds * 60)
+
+    const speed = Math.hypot(body.vx, body.vy)
+    if (speed > motionMaxSpeed) {
+      const scale = motionMaxSpeed / speed
+      body.vx *= scale
+      body.vy *= scale
+    }
+
+    body.x += body.vx * deltaSeconds
+    body.y += body.vy * deltaSeconds
+    body.rotation += (body.vx * deltaSeconds) / 10
+
+    body.x = Math.min(metrics.width - metrics.radius, Math.max(metrics.radius, body.x))
+    body.y = Math.min(metrics.height - metrics.radius, Math.max(metrics.radius, body.y))
+
+    for (const obstacle of obstacles) {
+      const closestX = Math.min(obstacle.right, Math.max(obstacle.left, body.x))
+      const closestY = Math.min(obstacle.bottom, Math.max(obstacle.top, body.y))
+      const dx = body.x - closestX
+      const dy = body.y - closestY
+      const distance = Math.hypot(dx, dy)
+
+      if (distance > metrics.radius || distance === 0) {
+        continue
+      }
+
+      const push = metrics.radius - distance
+      const nx = dx / distance
+      const ny = dy / distance
+      body.x += nx * push
+      body.y += ny * push
+
+      if (Math.abs(nx) > Math.abs(ny)) {
+        body.vx *= -0.34
+      } else {
+        body.vy *= -0.34
+      }
+    }
+
+    const holeDistance = Math.hypot(body.x - metrics.hole.x, body.y - metrics.hole.y)
+    const isInsideHole = holeDistance < metrics.hole.radius - metrics.radius * 0.18
+    const isSlowEnough = Math.hypot(body.vx, body.vy) < motionWinSpeed
+
+    if (isInsideHole && isSlowEnough) {
+      body.x += (metrics.hole.x - body.x) * 0.24
+      body.y += (metrics.hole.y - body.y) * 0.24
+      body.vx *= 0.4
+      body.vy *= 0.4
+      completeCalibration()
+    }
+
+    bodyRef.current = { ...body }
+    setBall({ ...body })
+  }
+
+  useEffect(() => {
+    if (!isPlaying) {
+      lastFrameRef.current = null
+      return undefined
+    }
+
+    let frame = 0
+
+    function tick(timestamp: number) {
+      const lastFrame = lastFrameRef.current ?? timestamp
+      const deltaSeconds = Math.min(0.033, Math.max(0, (timestamp - lastFrame) / 1000))
+      lastFrameRef.current = timestamp
+
+      moveBody(deltaSeconds)
+      frame = window.requestAnimationFrame(tick)
+    }
+
+    frame = window.requestAnimationFrame(tick)
+
+    return () => window.cancelAnimationFrame(frame)
+    // moveBody reads live refs and current mode; restarting this loop on every render would jitter physics.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, mode])
+
+  useEffect(() => {
+    if (!isPlaying) {
+      return undefined
+    }
+
+    const frame = window.requestAnimationFrame(resetBall)
+
+    return () => window.cancelAnimationFrame(frame)
+    // resetBall must run only when the board first appears.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying])
+
+  useEffect(() => {
+    if (mode !== 'motion') {
+      return undefined
+    }
+
+    function handleOrientation(event: DeviceOrientationEvent) {
+      hasOrientationEventRef.current = true
+      const gamma = event.gamma ?? 0
+      const beta = event.beta ?? 0
+      const rawX = Math.abs(gamma) < motionDeadZone ? 0 : gamma / 24
+      const rawY = Math.abs(beta) < motionDeadZone ? 0 : (beta - 35) / 28
+
+      tiltRef.current = {
+        x: tiltRef.current.x * 0.82 + Math.max(-1, Math.min(1, rawX)) * 0.18,
+        y: tiltRef.current.y * 0.82 + Math.max(-1, Math.min(1, rawY)) * 0.18,
+      }
+    }
+
+    window.addEventListener('deviceorientation', handleOrientation)
+
+    return () => window.removeEventListener('deviceorientation', handleOrientation)
+  }, [mode])
+
+  useEffect(() => {
+    function handleVisibilityChange() {
+      lastFrameRef.current = null
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+
+      if (successTimerRef.current) {
+        window.clearTimeout(successTimerRef.current)
+      }
+    }
+  }, [])
+
+  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (mode !== 'fallback' || event.buttons !== 1) {
+      return
+    }
+
+    const metrics = getBoardMetrics()
+
+    if (!metrics) {
+      return
+    }
+
+    const nextBody = {
+      ...bodyRef.current,
+      x: Math.min(
+        metrics.width - metrics.radius,
+        Math.max(metrics.radius, event.clientX - metrics.rect.left),
+      ),
+      y: Math.min(
+        metrics.height - metrics.radius,
+        Math.max(metrics.radius, event.clientY - metrics.rect.top),
+      ),
+      vx: 0,
+      vy: 0,
+    }
+
+    bodyRef.current = nextBody
+    setBall(nextBody)
+    moveBody(0)
+  }
+
+  function setFallbackDirection(x: number, y: number) {
+    fallbackVectorRef.current = { x, y }
+  }
+
+  const ballScale = mode === 'complete' ? 0.18 : 1
+
+  return (
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-flossa-black px-4 pb-6 pt-[calc(104px+env(safe-area-inset-top))] text-flossa-white">
+      <div className="loading-grid absolute inset-0 opacity-30" />
+      <div className="scanlines absolute inset-0 opacity-20" />
+
+      <section className="relative z-10 flex min-h-[calc(100dvh-132px)] w-full max-w-[430px] flex-col font-code uppercase">
+        {mode === 'intro' ? (
+          <div className="m-auto w-full animate-fade-up border border-terminal-500/35 bg-flossa-black/82 p-5 text-center shadow-[0_0_46px_rgb(57_255_20_/_0.14)]">
+            <p className="text-[11px] tracking-[0.34em] text-terminal-500/55">PROTOCOL 04B</p>
+            <h1 className="mt-5 text-3xl font-semibold leading-tight tracking-[0.16em] text-terminal-500">
+              Motion Calibration
+            </h1>
+            <p className="mt-6 text-xs leading-6 tracking-[0.14em] text-flossa-white/62">
+              Repository core displaced.
+            </p>
+            <p className="mt-5 text-xs leading-6 tracking-[0.14em] text-flossa-white/62">
+              Tilt the device<br />
+              to restore alignment.
+            </p>
+            <button
+              type="button"
+              onClick={beginCalibration}
+              className="mt-8 h-14 w-full border border-terminal-500/55 bg-terminal-500 px-5 text-[12px] font-semibold tracking-[0.2em] text-flossa-black shadow-[0_0_34px_rgb(57_255_20_/_0.18)] transition duration-200 hover:bg-flossa-white focus:outline-none focus:ring-2 focus:ring-terminal-500 focus:ring-offset-2 focus:ring-offset-flossa-black active:scale-[0.98]"
+            >
+              BEGIN CALIBRATION
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="mb-3 flex items-center justify-between text-[10px] tracking-[0.2em] text-flossa-white/52">
+              <span>PROTOCOL 04B</span>
+              <span>{mode === 'fallback' ? 'FALLBACK' : mode === 'complete' ? 'ALIGNED' : 'MOTION'}</span>
+            </div>
+
+            <div
+              ref={boardRef}
+              onPointerDown={handlePointerMove}
+              onPointerMove={handlePointerMove}
+              className="motion-board relative min-h-[56dvh] flex-1 overflow-hidden border border-terminal-500/30 bg-flossa-black/78 shadow-[0_0_46px_rgb(57_255_20_/_0.12)]"
+            >
+              <div className="motion-hole absolute left-1/2 top-[82%] h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full" />
+
+              {motionObstacles.map((obstacle, index) => (
+                <div
+                  key={index}
+                  className="motion-obstacle absolute"
+                  style={{
+                    left: `${obstacle.x * 100}%`,
+                    top: `${obstacle.y * 100}%`,
+                    width: `${obstacle.width * 100}%`,
+                    height: `${obstacle.height * 100}%`,
+                  }}
+                />
+              ))}
+
+              <img
+                src={ownerBallImage}
+                alt="Repository core ball"
+                draggable={false}
+                className={`motion-ball absolute h-[82px] w-[82px] select-none rounded-full object-cover ${
+                  mode === 'complete' ? 'motion-ball-complete' : ''
+                }`}
+                style={{
+                  left: `${ball.x - motionBallSize / 2}px`,
+                  top: `${ball.y - motionBallSize / 2}px`,
+                  transform: `rotate(${ball.rotation}deg) scale(${ballScale})`,
+                }}
+              />
+            </div>
+
+            <div className="mt-4 min-h-[112px] text-center">
+              {mode === 'fallback' ? (
+                <div className="animate-fade-up border border-terminal-500/25 bg-flossa-black/70 p-3 text-[11px] leading-5 tracking-[0.14em] text-flossa-white/62">
+                  <p className="text-red-300">{sensorMessage || 'MOTION SENSOR UNAVAILABLE'}</p>
+                  <p className="mt-2 text-terminal-500">Fallback controls initialized.</p>
+                </div>
+              ) : null}
+
+              {mode === 'complete' ? (
+                <div className="success-pulse border border-terminal-500/45 bg-terminal-500/10 p-4 text-[12px] leading-6 tracking-[0.16em] text-terminal-500">
+                  <p>CORE ALIGNED</p>
+                  <p className="text-flossa-white/64">Motion calibration complete.</p>
+                </div>
+              ) : null}
+
+              {mode === 'fallback' && !showContinue ? (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <span />
+                  <button
+                    type="button"
+                    onPointerDown={() => setFallbackDirection(0, -1)}
+                    onPointerUp={() => setFallbackDirection(0, 0)}
+                    onPointerLeave={() => setFallbackDirection(0, 0)}
+                    className="h-12 border border-terminal-500/35 text-terminal-500"
+                  >
+                    UP
+                  </button>
+                  <span />
+                  <button
+                    type="button"
+                    onPointerDown={() => setFallbackDirection(-1, 0)}
+                    onPointerUp={() => setFallbackDirection(0, 0)}
+                    onPointerLeave={() => setFallbackDirection(0, 0)}
+                    className="h-12 border border-terminal-500/35 text-terminal-500"
+                  >
+                    LEFT
+                  </button>
+                  <button
+                    type="button"
+                    onPointerDown={() => setFallbackDirection(0, 1)}
+                    onPointerUp={() => setFallbackDirection(0, 0)}
+                    onPointerLeave={() => setFallbackDirection(0, 0)}
+                    className="h-12 border border-terminal-500/35 text-terminal-500"
+                  >
+                    DOWN
+                  </button>
+                  <button
+                    type="button"
+                    onPointerDown={() => setFallbackDirection(1, 0)}
+                    onPointerUp={() => setFallbackDirection(0, 0)}
+                    onPointerLeave={() => setFallbackDirection(0, 0)}
+                    className="h-12 border border-terminal-500/35 text-terminal-500"
+                  >
+                    RIGHT
+                  </button>
+                </div>
+              ) : null}
+
+              {showContinue ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSystemSound('click')
+                    onSuccess()
+                  }}
+                  className="mt-4 h-14 w-full border border-terminal-500/55 bg-terminal-500 px-5 text-[12px] font-semibold tracking-[0.2em] text-flossa-black shadow-[0_0_34px_rgb(57_255_20_/_0.18)] transition duration-200 hover:bg-flossa-white focus:outline-none focus:ring-2 focus:ring-terminal-500 focus:ring-offset-2 focus:ring-offset-flossa-black active:scale-[0.98]"
+                >
+                  CONTINUE RECOVERY
+                </button>
+              ) : null}
+            </div>
+          </>
+        )}
+      </section>
+    </main>
+  )
+}
+
 function Protocol05Screen({ onSuccess }: { onSuccess: () => void }) {
   const [answer, setAnswer] = useState('')
   const [status, setStatus] = useState<ProtocolStatus>('idle')
@@ -1512,7 +2007,7 @@ function Protocol06Screen({ onSuccess }: { onSuccess: () => void }) {
           </p>
           <p className="mt-4 text-xs leading-6 tracking-[0.16em] text-flossa-white/56">
             Use UV light<br />
-            to inspect the owner's<br />
+            to inspect the guard's<br />
             left forearm.
           </p>
         </div>
