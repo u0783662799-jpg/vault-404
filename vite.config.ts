@@ -44,6 +44,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,gif,mp3,wav,woff,woff2}'],
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
         runtimeCaching: [],
       },
     }),
