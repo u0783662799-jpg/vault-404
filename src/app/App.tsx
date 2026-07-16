@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent
 import { registerSW } from 'virtual:pwa-register'
 import secureMessageAudio from '../assets/secure-message.mp3'
 import papalUnlockAudio from '../assets/papal-unlock.mp3'
+import dorotaHappyImage from '../assets/dorota-happy.png'
+import dorotaSadImage from '../assets/dorota-sad.png'
 import ownerImage from '../assets/owner.png'
 import ownerBallImage from '../assets/owner-ball.png'
 import popeImage from '../assets/pope.png'
@@ -21,6 +23,7 @@ type AppScreen =
   | 'motion-calibration'
   | 'protocol-05'
   | 'protocol-06'
+  | 'cleaning-game'
   | 'success'
 
 const codeLines = [
@@ -66,6 +69,7 @@ const appScreens: AppScreen[] = [
   'motion-calibration',
   'protocol-05',
   'protocol-06',
+  'cleaning-game',
   'success',
 ]
 let audioContext: AudioContext | null = null
@@ -231,6 +235,8 @@ export function App() {
       fetch(papalUnlockAudio, { cache: 'force-cache' }),
       fetch(popeImage, { cache: 'force-cache' }),
       fetch(ownerBallImage, { cache: 'force-cache' }),
+      fetch(dorotaSadImage, { cache: 'force-cache' }),
+      fetch(dorotaHappyImage, { cache: 'force-cache' }),
     ]).catch(() => undefined)
   }, [])
 
@@ -347,10 +353,12 @@ export function App() {
         <Protocol06Screen
           onSuccess={() => {
             setRecoveryProgress(100)
-            continueWithLoading('success')
+            continueWithLoading('cleaning-game')
           }}
         />
       )
+    } else if (screen === 'cleaning-game') {
+      content = <CleaningGameScreen onComplete={() => continueWithLoading('success')} />
     } else {
       content = <SuccessScreen />
     }
@@ -2068,6 +2076,245 @@ function Protocol06Screen({ onSuccess }: { onSuccess: () => void }) {
               <span>Guardian verified.</span>
             </div>
           ) : null}
+        </div>
+      </section>
+    </main>
+  )
+}
+
+function playCleaningSuccessSound() {
+  try {
+    const context = getAudioContext()
+    void context.resume()
+    startAmbientSound()
+    const now = context.currentTime
+
+    playTone(660, now, 0.08, 0.045)
+    playTone(880, now + 0.09, 0.08, 0.045)
+    playTone(1320, now + 0.19, 0.14, 0.05)
+  } catch {
+    // Optional sound cue; the visual success state is enough.
+  }
+}
+
+function CleaningGameScreen({ onComplete }: { onComplete: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [cleanedPercent, setCleanedPercent] = useState(0)
+  const [isComplete, setIsComplete] = useState(false)
+  const cleanThreshold = 72
+
+  function drawSlimeMask() {
+    const canvas = canvasRef.current
+
+    if (!canvas) {
+      return
+    }
+
+    const rect = canvas.getBoundingClientRect()
+    const scale = window.devicePixelRatio || 1
+    canvas.width = Math.round(rect.width * scale)
+    canvas.height = Math.round(rect.height * scale)
+
+    const context = canvas.getContext('2d')
+
+    if (!context) {
+      return
+    }
+
+    context.setTransform(scale, 0, 0, scale, 0, 0)
+    context.clearRect(0, 0, rect.width, rect.height)
+    context.globalCompositeOperation = 'source-over'
+    context.shadowColor = 'rgb(57 255 20 / 0.7)'
+    context.shadowBlur = 14
+
+    const blobs = [
+      { x: 0.32, y: 0.57, rx: 0.18, ry: 0.09 },
+      { x: 0.68, y: 0.57, rx: 0.18, ry: 0.09 },
+      { x: 0.5, y: 0.665, rx: 0.2, ry: 0.065 },
+      { x: 0.42, y: 0.645, rx: 0.08, ry: 0.045 },
+      { x: 0.58, y: 0.645, rx: 0.08, ry: 0.045 },
+    ]
+
+    for (const blob of blobs) {
+      const gradient = context.createRadialGradient(
+        blob.x * rect.width,
+        blob.y * rect.height,
+        4,
+        blob.x * rect.width,
+        blob.y * rect.height,
+        blob.rx * rect.width,
+      )
+      gradient.addColorStop(0, 'rgb(57 255 20 / 0.96)')
+      gradient.addColorStop(0.62, 'rgb(57 255 20 / 0.78)')
+      gradient.addColorStop(1, 'rgb(57 255 20 / 0.08)')
+
+      context.fillStyle = gradient
+      context.beginPath()
+      context.ellipse(
+        blob.x * rect.width,
+        blob.y * rect.height,
+        blob.rx * rect.width,
+        blob.ry * rect.height,
+        0,
+        0,
+        Math.PI * 2,
+      )
+      context.fill()
+    }
+
+    context.shadowBlur = 0
+    context.fillStyle = 'rgb(255 255 255 / 0.28)'
+    for (let index = 0; index < 18; index += 1) {
+      const x = rect.width * (0.25 + ((index * 0.13) % 0.5))
+      const y = rect.height * (0.52 + ((index * 0.07) % 0.18))
+      context.beginPath()
+      context.arc(x, y, 2 + (index % 3), 0, Math.PI * 2)
+      context.fill()
+    }
+
+    setCleanedPercent(0)
+  }
+
+  function calculateCleanedPercent() {
+    const canvas = canvasRef.current
+    const context = canvas?.getContext('2d')
+
+    if (!canvas || !context) {
+      return 0
+    }
+
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+    let dirtyPixels = 0
+
+    for (let index = 3; index < pixels.length; index += 16) {
+      if (pixels[index] > 24) {
+        dirtyPixels += 1
+      }
+    }
+
+    const initialDirtyPixels = Number(canvas.dataset.initialDirtyPixels || dirtyPixels || 1)
+    canvas.dataset.initialDirtyPixels = initialDirtyPixels.toString()
+
+    return Math.min(100, Math.round(100 - (dirtyPixels / initialDirtyPixels) * 100))
+  }
+
+  function wipeAt(clientX: number, clientY: number) {
+    if (isComplete) {
+      return
+    }
+
+    const canvas = canvasRef.current
+    const context = canvas?.getContext('2d')
+
+    if (!canvas || !context) {
+      return
+    }
+
+    const rect = canvas.getBoundingClientRect()
+    const scale = window.devicePixelRatio || 1
+    const x = (clientX - rect.left) * scale
+    const y = (clientY - rect.top) * scale
+
+    context.save()
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.globalCompositeOperation = 'destination-out'
+    context.beginPath()
+    context.arc(x, y, 34 * scale, 0, Math.PI * 2)
+    context.fill()
+    context.restore()
+
+    const nextPercent = calculateCleanedPercent()
+    setCleanedPercent(nextPercent)
+
+    if (nextPercent >= cleanThreshold) {
+      setIsComplete(true)
+      playCleaningSuccessSound()
+      window.navigator.vibrate?.([35, 25, 55])
+    }
+  }
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(drawSlimeMask)
+    window.addEventListener('resize', drawSlimeMask)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', drawSlimeMask)
+    }
+  }, [])
+
+  return (
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-flossa-black px-4 pb-6 pt-[calc(104px+env(safe-area-inset-top))] text-flossa-white">
+      <div className="loading-grid absolute inset-0 opacity-30" />
+      <div className="scanlines absolute inset-0 opacity-20" />
+
+      <section className="relative z-10 flex w-full max-w-[430px] flex-col font-code uppercase">
+        <div className="mb-4 text-center">
+          <p className="text-[11px] tracking-[0.34em] text-terminal-500/55">UNRELATED TASK</p>
+          <h1 className="mt-3 text-2xl font-semibold leading-tight tracking-[0.16em] text-terminal-500">
+            Facial Cleanup
+          </h1>
+        </div>
+
+        <div className="cleaning-frame relative mx-auto w-full overflow-hidden border border-terminal-500/30 bg-flossa-black/80 shadow-[0_0_46px_rgb(57_255_20_/_0.12)]">
+          <img
+            src={isComplete ? dorotaHappyImage : dorotaSadImage}
+            alt=""
+            draggable={false}
+            className="block aspect-[768/1024] w-full select-none object-cover"
+          />
+          {!isComplete ? (
+            <canvas
+              ref={canvasRef}
+              className="absolute inset-0 h-full w-full touch-none"
+              onPointerDown={(event) => {
+                playSystemSound('click')
+                event.currentTarget.setPointerCapture(event.pointerId)
+                wipeAt(event.clientX, event.clientY)
+              }}
+              onPointerMove={(event) => {
+                if (event.buttons === 1) {
+                  wipeAt(event.clientX, event.clientY)
+                }
+              }}
+            />
+          ) : null}
+        </div>
+
+        <div className="mt-4 min-h-[132px] text-center">
+          {!isComplete ? (
+            <>
+              <div className="mb-3 flex items-center justify-between text-[10px] tracking-[0.22em] text-flossa-white/50">
+                <span>CLEANING</span>
+                <span>{cleanedPercent}%</span>
+              </div>
+              <div className="h-3 overflow-hidden border border-terminal-500/35 bg-flossa-graphite/70 p-[2px]">
+                <div
+                  className="h-full bg-terminal-500 transition-[width] duration-150"
+                  style={{ width: `${cleanedPercent}%` }}
+                />
+              </div>
+              <p className="mt-4 text-[11px] leading-5 tracking-[0.14em] text-flossa-white/58">
+                Wipe the green contamination from cheeks and mouth.
+              </p>
+            </>
+          ) : (
+            <div className="animate-fade-up">
+              <p className="success-pulse border border-terminal-500/45 bg-terminal-500/10 p-4 text-[12px] leading-6 tracking-[0.14em] text-terminal-500">
+                You washed Dorota Wellman - unrelated task. Congratulations.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  playSystemSound('click')
+                  onComplete()
+                }}
+                className="mt-4 h-14 w-full border border-terminal-500/55 bg-terminal-500 px-5 text-[12px] font-semibold tracking-[0.2em] text-flossa-black shadow-[0_0_34px_rgb(57_255_20_/_0.18)] transition duration-200 hover:bg-flossa-white focus:outline-none focus:ring-2 focus:ring-terminal-500 focus:ring-offset-2 focus:ring-offset-flossa-black active:scale-[0.98]"
+              >
+                CONTINUE
+              </button>
+            </div>
+          )}
         </div>
       </section>
     </main>
