@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { registerSW } from 'virtual:pwa-register'
 import secureMessageAudio from '../assets/secure-message.mp3'
 import ownerImage from '../assets/owner.png'
 
@@ -43,7 +44,23 @@ const loadingMessages = [
 ]
 
 const recoveryTimeLimitSeconds = 30 * 60
+const savedScreenKey = 'git-recovery-screen'
+const savedProgressKey = 'git-recovery-progress'
+const savedTimeLeftKey = 'git-recovery-time-left'
 const secureMessageStorageKey = 'git-recovery-secure-message-listened'
+const appScreens: AppScreen[] = [
+  'start',
+  'loading',
+  'transition',
+  'secure-message',
+  'protocol-01',
+  'protocol-02',
+  'protocol-03',
+  'protocol-04',
+  'protocol-05',
+  'protocol-06',
+  'success',
+]
 const secureMessageTranscript = [
   'Paweł Werda.',
   'Jeżeli słyszysz tę wiadomość, procedura odzyskiwania została uruchomiona prawidłowo.',
@@ -55,6 +72,26 @@ const secureMessageTranscript = [
 ]
 
 let audioContext: AudioContext | null = null
+
+function loadSavedScreen() {
+  const savedScreen = window.localStorage.getItem(savedScreenKey)
+
+  return appScreens.includes(savedScreen as AppScreen) ? (savedScreen as AppScreen) : 'start'
+}
+
+function loadSavedProgress() {
+  const savedProgress = Number(window.localStorage.getItem(savedProgressKey))
+
+  return Number.isFinite(savedProgress) ? Math.min(100, Math.max(0, savedProgress)) : 0
+}
+
+function loadSavedTimeLeft() {
+  const savedTimeLeft = Number(window.localStorage.getItem(savedTimeLeftKey))
+
+  return Number.isFinite(savedTimeLeft)
+    ? Math.min(recoveryTimeLimitSeconds, Math.max(0, savedTimeLeft))
+    : recoveryTimeLimitSeconds
+}
 
 function getAudioContext() {
   audioContext ??= new AudioContext()
@@ -110,10 +147,13 @@ function playSystemSound(sound: SystemSound) {
 }
 
 export function App() {
-  const [screen, setScreen] = useState<AppScreen>('start')
+  const [screen, setScreen] = useState<AppScreen>(loadSavedScreen)
   const [transitionTarget, setTransitionTarget] = useState<AppScreen>('protocol-01')
-  const [recoveryProgress, setRecoveryProgress] = useState(0)
-  const [timeLeft, setTimeLeft] = useState(recoveryTimeLimitSeconds)
+  const [recoveryProgress, setRecoveryProgress] = useState(loadSavedProgress)
+  const [timeLeft, setTimeLeft] = useState(loadSavedTimeLeft)
+  const [isUpdateAvailable, setIsUpdateAvailable] = useState(false)
+  const [updateServiceWorker, setUpdateServiceWorker] =
+    useState<ReturnType<typeof registerSW> | null>(null)
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -125,6 +165,29 @@ export function App() {
 
   useEffect(() => {
     void fetch(secureMessageAudio, { cache: 'force-cache' }).catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(savedScreenKey, screen)
+  }, [screen])
+
+  useEffect(() => {
+    window.localStorage.setItem(savedProgressKey, recoveryProgress.toString())
+  }, [recoveryProgress])
+
+  useEffect(() => {
+    window.localStorage.setItem(savedTimeLeftKey, timeLeft.toString())
+  }, [timeLeft])
+
+  useEffect(() => {
+    const updateSW = registerSW({
+      immediate: true,
+      onNeedRefresh() {
+        setIsUpdateAvailable(true)
+      },
+    })
+
+    setUpdateServiceWorker(() => updateSW)
   }, [])
 
   function continueWithLoading(nextScreen: AppScreen) {
@@ -217,8 +280,43 @@ export function App() {
     <>
       <GlobalCrtEffects />
       <RecoveryProgressBar progress={recoveryProgress} timeLeft={timeLeft} />
+      <PwaStatus
+        isUpdateAvailable={isUpdateAvailable}
+        onInstallUpdate={() => {
+          void updateServiceWorker?.(true)
+        }}
+      />
       {content}
     </>
+  )
+}
+
+function PwaStatus({
+  isUpdateAvailable,
+  onInstallUpdate,
+}: {
+  isUpdateAvailable: boolean
+  onInstallUpdate: () => void
+}) {
+  if (!isUpdateAvailable) {
+    return null
+  }
+
+  return (
+    <aside className="fixed bottom-4 left-4 right-4 z-[60] mx-auto max-w-[430px] border border-terminal-500/30 bg-flossa-black/88 p-3 font-code uppercase text-flossa-white shadow-[0_0_34px_rgb(57_255_20_/_0.12)] backdrop-blur-md">
+      <div className="flex flex-col gap-3">
+        <p className="text-[11px] font-semibold tracking-[0.2em] text-terminal-500">
+          SYSTEM UPDATE AVAILABLE
+        </p>
+        <button
+          type="button"
+          onClick={onInstallUpdate}
+          className="h-11 border border-terminal-500/55 bg-terminal-500 px-4 text-[11px] font-semibold tracking-[0.18em] text-flossa-black transition hover:bg-flossa-white focus:outline-none focus:ring-2 focus:ring-terminal-500 focus:ring-offset-2 focus:ring-offset-flossa-black"
+        >
+          INSTALL SYSTEM UPDATE
+        </button>
+      </div>
+    </aside>
   )
 }
 
@@ -1408,14 +1506,16 @@ function SuccessScreen() {
 
           <div className="mx-auto mt-8 h-px w-4/5 bg-terminal-500/30 shadow-[0_0_20px_rgb(57_255_20_/_0.45)]" />
 
-          <p className="mt-7 text-[10px] tracking-[0.24em] text-flossa-white/40">EXIT CODE 0</p>
+          <p className="mt-7 text-[10px] tracking-[0.24em] text-flossa-white/40">
+            Twój kod do kłódki to 997
+          </p>
 
           <button
             type="button"
             onClick={openFinalVideo}
             className="mt-6 h-14 w-full border border-terminal-500/55 bg-terminal-500 px-5 text-[12px] font-semibold uppercase tracking-[0.24em] text-flossa-black shadow-[0_0_34px_rgb(57_255_20_/_0.18)] transition duration-200 hover:bg-flossa-white focus:outline-none focus:ring-2 focus:ring-terminal-500 focus:ring-offset-2 focus:ring-offset-flossa-black active:scale-[0.98]"
           >
-            ZAKOŃCZ
+            kliknij
           </button>
         </div>
       </section>
