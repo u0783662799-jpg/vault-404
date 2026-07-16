@@ -1421,8 +1421,8 @@ type MotionBody = {
   rotation: number
 }
 
-const motionBallSize = 72
-const motionHoleSize = 90
+const motionBallSize = 50
+const motionHoleSize = 82
 const motionTiltStrength = 980
 const motionFallbackStrength = 820
 const motionFriction = 0.91
@@ -1430,12 +1430,14 @@ const motionMaxSpeed = 620
 const motionDeadZone = 1.8
 const motionWinSpeed = 135
 const motionObstacles = [
-  { x: 0.08, y: 0.2, width: 0.34, height: 0.024 },
-  { x: 0.56, y: 0.3, width: 0.36, height: 0.024 },
-  { x: 0.16, y: 0.4, width: 0.4, height: 0.024 },
-  { x: 0.62, y: 0.51, width: 0.3, height: 0.024 },
-  { x: 0.08, y: 0.62, width: 0.36, height: 0.024 },
-  { x: 0.5, y: 0.71, width: 0.28, height: 0.024 },
+  { x: 0.2, y: 0.22, width: 0.16, height: 0.02 },
+  { x: 0.64, y: 0.22, width: 0.16, height: 0.02 },
+  { x: 0.04, y: 0.39, width: 0.2, height: 0.02 },
+  { x: 0.48, y: 0.39, width: 0.16, height: 0.02 },
+  { x: 0.76, y: 0.39, width: 0.16, height: 0.02 },
+  { x: 0.22, y: 0.57, width: 0.18, height: 0.02 },
+  { x: 0.62, y: 0.57, width: 0.2, height: 0.02 },
+  { x: 0.36, y: 0.72, width: 0.24, height: 0.02 },
 ]
 
 function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
