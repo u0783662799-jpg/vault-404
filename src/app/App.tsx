@@ -47,6 +47,7 @@ const recoveryTimeLimitSeconds = 30 * 60
 const savedScreenKey = 'git-recovery-screen'
 const savedProgressKey = 'git-recovery-progress'
 const savedTimeLeftKey = 'git-recovery-time-left'
+const savedDeadlineKey = 'git-recovery-deadline-at'
 const secureMessageStorageKey = 'git-recovery-secure-message-listened'
 const appScreens: AppScreen[] = [
   'start',
@@ -85,12 +86,25 @@ function loadSavedProgress() {
   return Number.isFinite(savedProgress) ? Math.min(100, Math.max(0, savedProgress)) : 0
 }
 
-function loadSavedTimeLeft() {
-  const savedTimeLeft = Number(window.localStorage.getItem(savedTimeLeftKey))
+function loadSavedDeadline() {
+  const now = Date.now()
+  const savedDeadline = Number(window.localStorage.getItem(savedDeadlineKey))
 
-  return Number.isFinite(savedTimeLeft)
-    ? Math.min(recoveryTimeLimitSeconds, Math.max(0, savedTimeLeft))
-    : recoveryTimeLimitSeconds
+  if (Number.isFinite(savedDeadline) && savedDeadline > now) {
+    return savedDeadline
+  }
+
+  const savedTimeLeft = Number(window.localStorage.getItem(savedTimeLeftKey))
+  const migratedTimeLeft =
+    Number.isFinite(savedTimeLeft) && savedTimeLeft > 0
+      ? Math.min(recoveryTimeLimitSeconds, savedTimeLeft)
+      : recoveryTimeLimitSeconds
+  const deadline = now + migratedTimeLeft * 1000
+
+  window.localStorage.setItem(savedDeadlineKey, deadline.toString())
+  window.localStorage.setItem(savedTimeLeftKey, migratedTimeLeft.toString())
+
+  return deadline
 }
 
 function getAudioContext() {
@@ -150,14 +164,16 @@ export function App() {
   const [screen, setScreen] = useState<AppScreen>(loadSavedScreen)
   const [transitionTarget, setTransitionTarget] = useState<AppScreen>('protocol-01')
   const [recoveryProgress, setRecoveryProgress] = useState(loadSavedProgress)
-  const [timeLeft, setTimeLeft] = useState(loadSavedTimeLeft)
+  const [deadlineAt] = useState(loadSavedDeadline)
+  const [currentTime, setCurrentTime] = useState(Date.now)
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false)
   const [updateServiceWorker, setUpdateServiceWorker] =
     useState<ReturnType<typeof registerSW> | null>(null)
+  const timeLeft = Math.max(0, Math.ceil((deadlineAt - currentTime) / 1000))
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setTimeLeft((currentTime) => Math.max(0, currentTime - 1))
+      setCurrentTime(Date.now())
     }, 1000)
 
     return () => window.clearInterval(timer)
@@ -178,6 +194,10 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem(savedTimeLeftKey, timeLeft.toString())
   }, [timeLeft])
+
+  useEffect(() => {
+    window.localStorage.setItem(savedDeadlineKey, deadlineAt.toString())
+  }, [deadlineAt])
 
   useEffect(() => {
     const updateSW = registerSW({
@@ -415,7 +435,7 @@ function StartScreen({ onInitialize }: { onInitialize: () => void }) {
               Repository Owner Detected
             </p>
             <p className="text-[11px] text-flossa-white/42">OWNER</p>
-            <p className="text-[13px] text-terminal-500">PAWEŁ SIKORA</p>
+            <p className="text-[13px] text-terminal-500">PAWEŁ WERDA</p>
             <p className="pt-3 text-[11px] text-flossa-white/42">Repository Status</p>
             <p className="text-[13px] text-terminal-500">
               <span className="glitch-status text-red-300">CORRUPTED</span>
