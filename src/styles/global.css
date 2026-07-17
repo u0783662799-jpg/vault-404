@@ -1063,18 +1063,48 @@
   bottom: 96px;
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 32px;
-  border: 1px solid rgb(255 70 70 / 0.64);
-  border-radius: 48% 52% 42% 58%;
+  width: 44px;
+  height: 28px;
+  border: 1px solid rgb(255 70 70 / 0.72);
+  border-radius: 54% 46% 44% 56%;
   background:
-    radial-gradient(circle at 35% 35%, rgb(255 255 255 / 0.2), transparent 16%),
-    rgb(255 50 50 / 0.16);
+    radial-gradient(circle at 72% 34%, rgb(255 230 230 / 0.82) 0 2px, transparent 3px),
+    radial-gradient(circle at 42% 34%, rgb(255 230 230 / 0.82) 0 2px, transparent 3px),
+    linear-gradient(90deg, rgb(255 70 70 / 0.28), rgb(92 8 16 / 0.68));
   color: rgb(255 140 140);
-  font-size: 8px;
-  letter-spacing: 0.12em;
-  box-shadow: 0 0 16px rgb(255 48 48 / 0.16);
-  animation: core-bug-walk 560ms steps(2) infinite;
+  font-size: 7px;
+  letter-spacing: 0.08em;
+  box-shadow: 0 0 16px rgb(255 48 48 / 0.22);
+  animation: core-bug-walk 340ms steps(2) infinite;
+}
+
+.core-run-obstacle-bug::before,
+.core-run-obstacle-bug::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  height: 1px;
+  background: rgb(255 120 120 / 0.74);
+  box-shadow:
+    -8px 7px 0 rgb(255 120 120 / 0.62),
+    8px 7px 0 rgb(255 120 120 / 0.62);
+}
+
+.core-run-obstacle-bug::before {
+  top: 6px;
+  transform: rotate(18deg);
+}
+
+.core-run-obstacle-bug::after {
+  bottom: 6px;
+  transform: rotate(-18deg);
+}
+
+.core-run-obstacle-bug span {
+  position: relative;
+  z-index: 1;
+  transform: translateY(1px);
 }
 
 .core-run-obstacle-pipe {

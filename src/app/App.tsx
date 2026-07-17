@@ -1293,9 +1293,9 @@ const coreRunObstacles: CoreRunObstacle[] = [
   { id: 4, x: 82, kind: 'pipe' },
   { id: 5, x: 91, kind: 'bug' },
 ]
-const coreRunDurationMs = 30000
+const coreRunDurationMs = 18000
 const coreRunSpeed = 100 / (coreRunDurationMs / 1000)
-const coreRunJumpDurationMs = 980
+const coreRunJumpDurationMs = 840
 
 function CoreRunIntroScreen({ onBegin }: { onBegin: () => void }) {
   return (
@@ -1343,6 +1343,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
   const [progress, setProgress] = useState(0)
   const [jumpPower, setJumpPower] = useState(0)
   const [collected, setCollected] = useState<number[]>([])
+  const [clearedObstacles, setClearedObstacles] = useState<number[]>([])
   const [health, setHealth] = useState(0)
   const [healthPulse, setHealthPulse] = useState<number | null>(null)
   const [showCompletePanel, setShowCompletePanel] = useState(false)
@@ -1360,6 +1361,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
     setProgress(0)
     setJumpPower(0)
     setCollected([])
+    setClearedObstacles([])
     setHealth(0)
     setHealthPulse(null)
     setShowCompletePanel(false)
@@ -1457,6 +1459,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
           if (obstacle.kind === 'bug') {
             if (nextJumpPower > 0.2) {
               clearedObstaclesRef.current = [...clearedObstaclesRef.current, obstacle.id]
+              setClearedObstacles(clearedObstaclesRef.current)
               playSystemSound('beep')
               return
             }
@@ -1467,6 +1470,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
 
           if (nextJumpPower > 0.34) {
             clearedObstaclesRef.current = [...clearedObstaclesRef.current, obstacle.id]
+            setClearedObstacles(clearedObstaclesRef.current)
             return
           }
 
@@ -1505,7 +1509,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
         <div className="mb-3">
           <div className="flex items-center justify-between text-[10px] tracking-[0.22em] text-flossa-white/52">
             <span>CORE RUN</span>
-            <span>{Math.min(30, Math.floor(progress / coreRunSpeed))}S / 30S</span>
+            <span>{Math.min(18, Math.floor(progress / coreRunSpeed))}S / 18S</span>
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-[0.16em] text-terminal-500">CORE RUN</h1>
           <div className="mt-3 flex items-center justify-between text-[10px] tracking-[0.16em] text-flossa-white/62">
@@ -1552,13 +1556,15 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
           })}
 
           {coreRunObstacles.map((obstacle) => (
-            <div
-              key={obstacle.id}
-              className={`core-run-obstacle core-run-obstacle-${obstacle.kind} absolute`}
-              style={{ left: `${20 + obstacle.x - progress}%` }}
-            >
-              {obstacle.kind === 'bug' ? <span>BUG</span> : null}
-            </div>
+            clearedObstacles.includes(obstacle.id) && obstacle.kind === 'bug' ? null : (
+              <div
+                key={obstacle.id}
+                className={`core-run-obstacle core-run-obstacle-${obstacle.kind} absolute`}
+                style={{ left: `${20 + obstacle.x - progress}%` }}
+              >
+                {obstacle.kind === 'bug' ? <span>BUG</span> : null}
+              </div>
+            )
           ))}
 
           <div
