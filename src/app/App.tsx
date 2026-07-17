@@ -1817,22 +1817,25 @@ function Protocol03Screen({ onSuccess }: { onSuccess: () => void }) {
             <p className="mt-4 text-xs leading-6 tracking-[0.14em] text-terminal-500/80">
               Call<br />
               <a
-                href="tel:+48732128058"
+                href="tel:+48732128216"
                 onClick={() => playSystemSound('click')}
                 className="inline-flex items-center gap-2 text-terminal-500 underline decoration-terminal-500/40 underline-offset-4"
               >
-                732 128 058
+                732 128 216
                 <span className="text-[10px] tracking-[0.18em] text-flossa-white/52">kliknij</span>
               </a>
             </p>
             <p className="terminal-type mt-4 max-w-max text-xs leading-6 tracking-[0.12em] text-flossa-white/72">
-              Ask exactly one question.
+              Ask exactly two questions.
             </p>
             <p className="mt-3 text-xs leading-6 tracking-[0.12em] text-terminal-500/80">
               Listen carefully.
             </p>
             <p className="mt-3 text-xs leading-6 tracking-[0.12em] text-terminal-500/80">
-              "Co to jest monsterek?"
+              "Jaka jest oferta?"
+            </p>
+            <p className="mt-2 text-xs leading-6 tracking-[0.12em] text-terminal-500/80">
+              "Jaka jest cena monsterka?"
             </p>
           </div>
         </div>
