@@ -1461,13 +1461,12 @@ type MotionBody = {
 
 const motionBallSize = 50
 const motionHoleSize = 94
-const motionHolePosition = { x: 0.5, y: 0.9 }
-const motionTiltStrength = 980
-const motionFallbackStrength = 820
+const motionHolePosition = { x: 0.5, y: 0.92 }
+const motionTiltStrength = 1380
+const motionFallbackStrength = 1120
 const motionFriction = 0.91
-const motionMaxSpeed = 620
+const motionMaxSpeed = 820
 const motionDeadZone = 1.8
-const motionWinSpeed = 360
 const motionObstacles = [
   { x: 0.2, y: 0.22, width: 0.16, height: 0.02 },
   { x: 0.64, y: 0.22, width: 0.16, height: 0.02 },
@@ -1507,6 +1506,7 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
     () => window.localStorage.getItem(motionCalibrationStorageKey) === 'true',
   )
   const [collectedPickups, setCollectedPickups] = useState<number[]>([])
+  const [showTiltHint, setShowTiltHint] = useState(true)
   const isPlaying = mode === 'motion' || mode === 'fallback'
   const healthPoints = collectedPickups.length * 5
 
@@ -1558,6 +1558,7 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
     playSystemSound('click')
     setSensorMessage('')
     setShowContinue(false)
+    setShowTiltHint(true)
     window.localStorage.removeItem(motionCalibrationStorageKey)
     setCollectedPickups([])
     collectedPickupsRef.current = []
@@ -1699,10 +1700,9 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
     }
 
     const holeDistance = Math.hypot(body.x - metrics.hole.x, body.y - metrics.hole.y)
-    const isInsideHole = holeDistance < metrics.hole.radius + metrics.radius * 0.28
-    const isSlowEnough = Math.hypot(body.vx, body.vy) < motionWinSpeed
+    const isInsideHole = holeDistance < metrics.hole.radius + metrics.radius
 
-    if (isInsideHole && isSlowEnough) {
+    if (isInsideHole) {
       body.x += (metrics.hole.x - body.x) * 0.24
       body.y += (metrics.hole.y - body.y) * 0.24
       body.vx *= 0.4
@@ -1737,6 +1737,16 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
     // moveBody reads live refs and current mode; restarting this loop on every render would jitter physics.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, mode])
+
+  useEffect(() => {
+    if (!isPlaying || !showTiltHint) {
+      return undefined
+    }
+
+    const timer = window.setTimeout(() => setShowTiltHint(false), 5000)
+
+    return () => window.clearTimeout(timer)
+  }, [isPlaying, showTiltHint])
 
   useEffect(() => {
     if (!isPlaying) {
@@ -1877,7 +1887,7 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
                   width: `${motionHoleSize}px`,
                 }}
               />
-              {mode !== 'complete' ? (
+              {mode !== 'complete' && showTiltHint ? (
                 <div className="tilt-hint pointer-events-none absolute left-1/2 top-5 z-20 -translate-x-1/2 border border-terminal-500/35 bg-flossa-black/80 px-4 py-3 text-center shadow-[0_0_22px_rgb(57_255_20_/_0.14)]">
                   <div className="tilt-phone mx-auto h-10 w-6 border border-terminal-500/45 bg-flossa-black/60 shadow-[0_0_18px_rgb(57_255_20_/_0.18)]" />
                   <p className="mt-2 whitespace-nowrap text-[9px] tracking-[0.2em] text-terminal-500/80">
@@ -2213,6 +2223,7 @@ function playCleaningSuccessSound() {
 
 function CleaningGameScreen({ onComplete }: { onComplete: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const cleaningResultRef = useRef<HTMLDivElement | null>(null)
   const [cleanedPercent, setCleanedPercent] = useState(0)
   const [isComplete, setIsComplete] = useState(false)
   const cleanThreshold = 72
@@ -2344,6 +2355,9 @@ function CleaningGameScreen({ onComplete }: { onComplete: () => void }) {
       setIsComplete(true)
       playCleaningSuccessSound()
       window.navigator.vibrate?.([35, 25, 55])
+      window.setTimeout(() => {
+        cleaningResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      }, 120)
     }
   }
 
@@ -2395,7 +2409,7 @@ function CleaningGameScreen({ onComplete }: { onComplete: () => void }) {
           ) : null}
         </div>
 
-        <div className="mt-4 min-h-[132px] text-center">
+        <div ref={cleaningResultRef} className="mt-4 min-h-[132px] text-center">
           {!isComplete ? (
             <>
               <div className="mb-3 flex items-center justify-between text-[10px] tracking-[0.22em] text-flossa-white/50">
