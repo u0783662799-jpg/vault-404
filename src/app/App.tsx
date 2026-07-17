@@ -30,6 +30,8 @@ type AppScreen =
   | 'secure-message'
   | 'protocol-01'
   | 'protocol-02'
+  | 'core-run-intro'
+  | 'core-run'
   | 'protocol-03'
   | 'protocol-04'
   | 'motion-calibration'
@@ -80,6 +82,8 @@ const appScreens: AppScreen[] = [
   'secure-message',
   'protocol-01',
   'protocol-02',
+  'core-run-intro',
+  'core-run',
   'protocol-03',
   'protocol-04',
   'motion-calibration',
@@ -343,10 +347,14 @@ export function App() {
         <Protocol02Screen
           onSuccess={() => {
             setRecoveryProgress(35)
-            continueWithLoading('protocol-03')
+            continueWithLoading('core-run-intro')
           }}
         />
       )
+    } else if (screen === 'core-run-intro') {
+      content = <CoreRunIntroScreen onBegin={() => continueWithLoading('core-run')} />
+    } else if (screen === 'core-run') {
+      content = <CoreRunScreen onComplete={() => continueWithLoading('protocol-03')} />
     } else if (screen === 'protocol-03') {
       content = (
         <Protocol03Screen
@@ -1122,6 +1130,11 @@ function Protocol02Screen({ onSuccess }: { onSuccess: () => void }) {
           <p className="mt-5 text-[11px] leading-6 tracking-[0.18em] text-terminal-500/70">
             Hint:<br />One digit<br />is missing.
           </p>
+          <p className="mt-4 text-[11px] leading-6 tracking-[0.16em] text-terminal-500/70">
+            This is the time<br />
+            for the envelope<br />
+            with this marking.
+          </p>
         </div>
 
         <form onSubmit={handleVerify} className="space-y-5">
@@ -1179,6 +1192,332 @@ function Protocol02Screen({ onSuccess }: { onSuccess: () => void }) {
   )
 }
 
+type CoreRunMode = 'running' | 'failed' | 'complete'
+
+type CoreRunBlock = {
+  id: number
+  x: number
+  health: number
+}
+
+type CoreRunObstacle = {
+  id: number
+  x: number
+  kind: 'gap' | 'bug' | 'pipe'
+}
+
+const coreRunBlocks: CoreRunBlock[] = [
+  { id: 0, x: 13, health: 10 },
+  { id: 1, x: 36, health: 20 },
+  { id: 2, x: 60, health: 30 },
+  { id: 3, x: 82, health: 40 },
+]
+const coreRunObstacles: CoreRunObstacle[] = [
+  { id: 0, x: 25, kind: 'gap' },
+  { id: 1, x: 51, kind: 'bug' },
+  { id: 2, x: 72, kind: 'pipe' },
+]
+const coreRunDurationMs = 25000
+const coreRunSpeed = 100 / (coreRunDurationMs / 1000)
+const coreRunJumpDurationMs = 880
+
+function CoreRunIntroScreen({ onBegin }: { onBegin: () => void }) {
+  return (
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-flossa-black px-5 pb-7 pt-[calc(104px+env(safe-area-inset-top))] text-center text-flossa-white">
+      <div className="loading-grid absolute inset-0 opacity-30" />
+      <div className="scanlines absolute inset-0 opacity-20" />
+
+      <section className="relative z-10 w-full max-w-[390px] animate-fade-up border border-terminal-500/35 bg-flossa-black/82 p-5 font-code uppercase shadow-[0_0_46px_rgb(57_255_20_/_0.14)]">
+        <p className="text-[11px] tracking-[0.34em] text-terminal-500/55">CORE RUN</p>
+        <h1 className="mt-5 text-2xl font-semibold leading-tight tracking-[0.16em] text-terminal-500">
+          Energy reserves detected.
+        </h1>
+        <div className="mt-8 border border-terminal-500/25 bg-flossa-black/70 p-4">
+          <p className="text-xs leading-6 tracking-[0.14em] text-flossa-white/62">
+            Collect all Monsters.
+          </p>
+          <p className="mt-3 text-xs leading-6 tracking-[0.14em] text-terminal-500/80">
+            Reach the extraction flag.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            playSystemSound('click')
+            onBegin()
+          }}
+          className="mt-8 h-14 w-full border border-terminal-500/55 bg-terminal-500 px-5 text-[12px] font-semibold tracking-[0.2em] text-flossa-black shadow-[0_0_34px_rgb(57_255_20_/_0.18)] transition duration-200 hover:bg-flossa-white focus:outline-none focus:ring-2 focus:ring-terminal-500 focus:ring-offset-2 focus:ring-offset-flossa-black active:scale-[0.98]"
+        >
+          INITIALIZE CORE RUN
+        </button>
+      </section>
+    </main>
+  )
+}
+
+function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
+  const frameRef = useRef<number | null>(null)
+  const lastFrameRef = useRef<number | null>(null)
+  const progressRef = useRef(0)
+  const jumpStartedAtRef = useRef<number | null>(null)
+  const collectedRef = useRef<number[]>([])
+  const clearedObstaclesRef = useRef<number[]>([])
+  const modeRef = useRef<CoreRunMode>('running')
+  const [mode, setMode] = useState<CoreRunMode>('running')
+  const [progress, setProgress] = useState(0)
+  const [jumpPower, setJumpPower] = useState(0)
+  const [collected, setCollected] = useState<number[]>([])
+  const [health, setHealth] = useState(0)
+  const [healthPulse, setHealthPulse] = useState<number | null>(null)
+  const heroScale = 1 + collected.length * 0.13
+
+  function resetRun() {
+    playSystemSound('click')
+    progressRef.current = 0
+    jumpStartedAtRef.current = null
+    collectedRef.current = []
+    clearedObstaclesRef.current = []
+    modeRef.current = 'running'
+    lastFrameRef.current = null
+    setProgress(0)
+    setJumpPower(0)
+    setCollected([])
+    setHealth(0)
+    setHealthPulse(null)
+    setMode('running')
+  }
+
+  function failRun() {
+    if (modeRef.current !== 'running') {
+      return
+    }
+
+    modeRef.current = 'failed'
+    setMode('failed')
+    playSystemSound('error')
+  }
+
+  function completeRun() {
+    if (modeRef.current !== 'running') {
+      return
+    }
+
+    modeRef.current = 'complete'
+    setMode('complete')
+    setProgress(100)
+    playSystemSound('success')
+  }
+
+  function handleJump() {
+    if (modeRef.current !== 'running') {
+      return
+    }
+
+    if (jumpPower < 0.08) {
+      jumpStartedAtRef.current = performance.now()
+      playSystemSound('click')
+    }
+  }
+
+  useEffect(() => {
+    function tick(timestamp: number) {
+      const lastFrame = lastFrameRef.current ?? timestamp
+      const deltaSeconds = Math.min(0.04, Math.max(0, (timestamp - lastFrame) / 1000))
+      lastFrameRef.current = timestamp
+
+      if (modeRef.current === 'running') {
+        const nextProgress = Math.min(100, progressRef.current + coreRunSpeed * deltaSeconds)
+        progressRef.current = nextProgress
+        setProgress(nextProgress)
+
+        let nextJumpPower = 0
+        if (jumpStartedAtRef.current !== null) {
+          const jumpAge = timestamp - jumpStartedAtRef.current
+          if (jumpAge >= coreRunJumpDurationMs) {
+            jumpStartedAtRef.current = null
+          } else {
+            nextJumpPower = Math.sin((jumpAge / coreRunJumpDurationMs) * Math.PI)
+          }
+        }
+        setJumpPower(nextJumpPower)
+
+        coreRunBlocks.forEach((block) => {
+          if (collectedRef.current.includes(block.id)) {
+            return
+          }
+
+          if (Math.abs(nextProgress - block.x) < 2.4 && nextJumpPower > 0.34) {
+            collectedRef.current = [...collectedRef.current, block.id]
+            setCollected(collectedRef.current)
+            setHealth((currentHealth) => currentHealth + block.health)
+            setHealthPulse(block.health)
+            window.setTimeout(() => setHealthPulse(null), 560)
+            playSystemSound('success')
+          }
+        })
+
+        coreRunObstacles.forEach((obstacle) => {
+          if (clearedObstaclesRef.current.includes(obstacle.id)) {
+            return
+          }
+
+          if (Math.abs(nextProgress - obstacle.x) > 1.65) {
+            return
+          }
+
+          if (obstacle.kind === 'bug') {
+            if (nextJumpPower > 0.28) {
+              clearedObstaclesRef.current = [...clearedObstaclesRef.current, obstacle.id]
+              playSystemSound('beep')
+              return
+            }
+
+            failRun()
+            return
+          }
+
+          if (nextJumpPower > 0.36) {
+            clearedObstaclesRef.current = [...clearedObstaclesRef.current, obstacle.id]
+            return
+          }
+
+          failRun()
+        })
+
+        if (nextProgress >= 99.6) {
+          if (collectedRef.current.length === coreRunBlocks.length) {
+            completeRun()
+          } else {
+            failRun()
+          }
+        }
+      }
+
+      frameRef.current = window.requestAnimationFrame(tick)
+    }
+
+    frameRef.current = window.requestAnimationFrame(tick)
+
+    return () => {
+      if (frameRef.current) {
+        window.cancelAnimationFrame(frameRef.current)
+      }
+    }
+  }, [])
+
+  return (
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-flossa-black px-4 pb-5 pt-[calc(104px+env(safe-area-inset-top))] text-flossa-white">
+      <div className="loading-grid absolute inset-0 opacity-30" />
+      <div className="scanlines absolute inset-0 opacity-20" />
+
+      <section className="relative z-10 flex min-h-[calc(100dvh-132px)] w-full max-w-[430px] flex-col font-code uppercase">
+        <div className="mb-3">
+          <div className="flex items-center justify-between text-[10px] tracking-[0.22em] text-flossa-white/52">
+            <span>CORE RUN</span>
+            <span>{Math.min(25, Math.floor(progress / coreRunSpeed))}S / 25S</span>
+          </div>
+          <h1 className="mt-2 text-2xl font-semibold tracking-[0.16em] text-terminal-500">CORE RUN</h1>
+          <div className="mt-3 flex items-center justify-between text-[10px] tracking-[0.16em] text-flossa-white/62">
+            <span>MONSTERS: {collected.length} / {coreRunBlocks.length}</span>
+            <span>HEALTH +{health}</span>
+          </div>
+        </div>
+
+        <div className="core-run-stage relative flex-1 overflow-hidden border border-terminal-500/30 bg-flossa-black/78">
+          <div className="core-run-track absolute inset-x-0 bottom-[74px] h-1 bg-terminal-500/35" />
+          <div
+            className="core-run-hero absolute left-[22%]"
+            style={{
+              bottom: `${77 + jumpPower * 118}px`,
+              transform: `translateX(-50%) scale(${heroScale})`,
+            }}
+          >
+            <div className="core-run-head" />
+            <div className="core-run-body" />
+          </div>
+
+          {coreRunBlocks.map((block) => {
+            const isCollected = collected.includes(block.id)
+            return (
+              <div
+                key={block.id}
+                className={`core-run-block absolute ${isCollected ? 'core-run-block-hit' : ''}`}
+                style={{ left: `${22 + block.x - progress}%` }}
+              >
+                {!isCollected ? <span>?</span> : <img src={monsterRubyRedImage} alt="" />}
+              </div>
+            )
+          })}
+
+          {coreRunObstacles.map((obstacle) => (
+            <div
+              key={obstacle.id}
+              className={`core-run-obstacle core-run-obstacle-${obstacle.kind} absolute`}
+              style={{ left: `${22 + obstacle.x - progress}%` }}
+            >
+              {obstacle.kind === 'bug' ? <span>BUG</span> : null}
+            </div>
+          ))}
+
+          <div className="core-run-flag absolute" style={{ left: `${22 + 100 - progress}%` }}>
+            <span />
+          </div>
+
+          {healthPulse ? (
+            <div className="core-run-health-pulse absolute inset-x-0 top-7 text-center text-sm font-semibold tracking-[0.2em] text-terminal-500">
+              HEALTH +{healthPulse}
+            </div>
+          ) : null}
+
+          {mode === 'failed' ? (
+            <div className="absolute inset-4 flex items-center justify-center bg-flossa-black/84 text-center">
+              <div className="border border-red-300/40 bg-flossa-black/90 p-5 text-[12px] leading-6 tracking-[0.16em] text-red-300">
+                <p className="protocol-error-glitch">SYSTEM FAILURE</p>
+                <p className="mt-3 text-flossa-white/62">Repository rolled back.</p>
+                <button
+                  type="button"
+                  onClick={resetRun}
+                  className="mt-5 h-12 w-full border border-terminal-500/45 bg-terminal-500 px-4 text-[11px] font-semibold tracking-[0.18em] text-flossa-black"
+                >
+                  RESTART FROM LAST COMMIT
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {mode === 'complete' ? (
+            <div className="absolute inset-4 flex items-center justify-center bg-flossa-black/84 text-center">
+              <div className="success-pulse border border-terminal-500/45 bg-terminal-500/10 p-5 text-[12px] leading-6 tracking-[0.16em] text-terminal-500">
+                <p>CORE RUN COMPLETE</p>
+                <p className="text-flossa-white/64">Energy successfully recovered.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSystemSound('click')
+                    onComplete()
+                  }}
+                  className="mt-5 h-12 w-full border border-terminal-500/55 bg-terminal-500 px-4 text-[11px] font-semibold tracking-[0.18em] text-flossa-black"
+                >
+                  CONTINUE RECOVERY
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          onPointerDown={handleJump}
+          disabled={mode !== 'running'}
+          className="mt-4 h-16 w-full border border-terminal-500/55 bg-terminal-500 px-5 text-[15px] font-semibold tracking-[0.24em] text-flossa-black shadow-[0_0_34px_rgb(57_255_20_/_0.18)] transition duration-200 active:scale-[0.98] disabled:cursor-default disabled:bg-flossa-graphite disabled:text-flossa-white/35"
+        >
+          JUMP
+        </button>
+      </section>
+    </main>
+  )
+}
+
 function Protocol03Screen({ onSuccess }: { onSuccess: () => void }) {
   const [answer, setAnswer] = useState('')
   const [status, setStatus] = useState<ProtocolStatus>('idle')
@@ -1231,6 +1570,9 @@ function Protocol03Screen({ onSuccess }: { onSuccess: () => void }) {
             </p>
             <p className="terminal-type mt-4 max-w-max text-xs leading-6 tracking-[0.12em] text-flossa-white/72">
               Ask exactly one question.
+            </p>
+            <p className="mt-3 text-xs leading-6 tracking-[0.12em] text-terminal-500/80">
+              Listen carefully.
             </p>
             <p className="mt-3 text-xs leading-6 tracking-[0.12em] text-terminal-500/80">
               "Co to jest monsterek?"
@@ -2143,6 +2485,7 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
   const wasCompleted = window.localStorage.getItem(bugPurgeStorageKey) === 'true'
   const initialBugs = bugPurgeInitialBugs.map((bug) => ({ ...bug, alive: wasCompleted ? false : bug.alive }))
   const arenaRef = useRef<HTMLDivElement | null>(null)
+  const completeAudioRef = useRef<HTMLAudioElement | null>(null)
   const bugsRef = useRef<BugTarget[]>(initialBugs)
   const projectilesRef = useRef<BugProjectile[]>([])
   const lastFrameRef = useRef<number | null>(null)
@@ -2190,7 +2533,13 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
     window.localStorage.setItem(bugPurgeStorageKey, 'true')
     window.localStorage.setItem(bugPurgeHpStorageKey, bugPurgeMinHp.toString())
     playSystemSound('success')
-    playLocalAudio(bugPurgeCompleteAudio, 0.9)
+    if (completeAudioRef.current) {
+      completeAudioRef.current.currentTime = 0
+      completeAudioRef.current.volume = 0.9
+      void completeAudioRef.current.play().catch(() => playLocalAudio(bugPurgeCompleteAudio, 0.9))
+    } else {
+      playLocalAudio(bugPurgeCompleteAudio, 0.9)
+    }
   }, [damageHits, eliminated, isComplete])
 
   function startResidualAttack() {
@@ -2229,7 +2578,6 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
     }
 
     startAmbientSound()
-    playLocalAudio(bugGunshotAudio, 0.62)
     window.navigator.vibrate?.(18)
     setShotPulse((pulse) => pulse + 1)
 
@@ -2256,6 +2604,8 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
     if (hitBugId === null) {
       return
     }
+
+    playLocalAudio(bugGunshotAudio, 0.18)
 
     const nextBugs = bugsRef.current.map((bug) =>
       bug.id === hitBugId ? { ...bug, alive: false } : bug,
@@ -2364,6 +2714,7 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
 
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-flossa-black px-4 pb-5 pt-[calc(104px+env(safe-area-inset-top))] text-flossa-white">
+      <audio ref={completeAudioRef} src={bugPurgeCompleteAudio} preload="auto" />
       <div className="loading-grid absolute inset-0 opacity-30" />
       <div className="scanlines absolute inset-0 opacity-20" />
       {damageFlash ? <div className="bug-damage-flash pointer-events-none fixed inset-0 z-[65]" /> : null}
