@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react'
 import { registerSW } from 'virtual:pwa-register'
 import secureMessageAudio from '../assets/secure-message.mp3'
 import papalUnlockAudio from '../assets/papal-unlock.mp3'
@@ -22,6 +31,8 @@ type AppScreen =
   | 'protocol-03'
   | 'protocol-04'
   | 'motion-calibration'
+  | 'bug-purge-intro'
+  | 'bug-purge'
   | 'protocol-05'
   | 'protocol-06'
   | 'cleaning-game'
@@ -58,6 +69,8 @@ const savedTimeLeftKey = 'git-recovery-time-left'
 const savedDeadlineKey = 'git-recovery-deadline-at'
 const secureMessageStorageKey = 'git-recovery-secure-message-listened-v2'
 const motionCalibrationStorageKey = 'git-recovery-motion-calibration-complete'
+const bugPurgeStorageKey = 'git-recovery-bug-purge-complete'
+const bugPurgeHpStorageKey = 'git-recovery-bug-purge-final-hp'
 const appScreens: AppScreen[] = [
   'start',
   'loading',
@@ -68,6 +81,8 @@ const appScreens: AppScreen[] = [
   'protocol-03',
   'protocol-04',
   'motion-calibration',
+  'bug-purge-intro',
+  'bug-purge',
   'protocol-05',
   'protocol-06',
   'cleaning-game',
@@ -337,6 +352,18 @@ export function App() {
         <MotionCalibrationScreen
           onSuccess={() => {
             window.localStorage.setItem(motionCalibrationStorageKey, 'true')
+            continueWithLoading('bug-purge-intro')
+          }}
+        />
+      )
+    } else if (screen === 'bug-purge-intro') {
+      content = <BugPurgeIntroScreen onBegin={() => continueWithLoading('bug-purge')} />
+    } else if (screen === 'bug-purge') {
+      content = (
+        <BugPurgeScreen
+          onComplete={() => {
+            window.localStorage.setItem(bugPurgeStorageKey, 'true')
+            window.localStorage.setItem(bugPurgeHpStorageKey, '10')
             continueWithLoading('protocol-05')
           }}
         />
@@ -2014,6 +2041,402 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
             </div>
           </>
         )}
+      </section>
+    </main>
+  )
+}
+
+type BugTarget = {
+  id: number
+  x: number
+  y: number
+  vx: number
+  vy: number
+  alive: boolean
+  shotCooldown: number
+}
+
+type BugProjectile = {
+  id: number
+  x: number
+  y: number
+  vy: number
+}
+
+type HitBurst = {
+  id: number
+  x: number
+  y: number
+}
+
+const bugPurgeBugCount = 7
+const bugPurgeDamage = 10
+const bugPurgeMinHp = 10
+const bugPurgeTargetHits = 9
+const bugPurgeBugSpeed = 74
+const bugPurgeShotInterval = 1.35
+const bugPurgeInitialBugs: BugTarget[] = Array.from({ length: bugPurgeBugCount }, (_, index) => ({
+  id: index,
+  x: 14 + ((index * 27) % 72),
+  y: 24 + ((index * 13) % 34),
+  vx: (index % 2 === 0 ? 1 : -1) * (bugPurgeBugSpeed + index * 7),
+  vy: (index % 3 === 0 ? 1 : -1) * (bugPurgeBugSpeed * 0.52 + index * 4),
+  alive: true,
+  shotCooldown: 0.7 + index * 0.22,
+}))
+
+function BugPurgeIntroScreen({ onBegin }: { onBegin: () => void }) {
+  return (
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-flossa-black px-5 pb-7 pt-[calc(104px+env(safe-area-inset-top))] text-center text-flossa-white">
+      <div className="loading-grid absolute inset-0 opacity-30" />
+      <div className="scanlines absolute inset-0 opacity-20" />
+
+      <section className="relative z-10 w-full max-w-[390px] animate-fade-up border border-terminal-500/35 bg-flossa-black/82 p-5 font-code uppercase shadow-[0_0_46px_rgb(57_255_20_/_0.14)]">
+        <p className="text-[11px] tracking-[0.34em] text-terminal-500/55">CORE ACCESS GRANTED</p>
+        <h1 className="mt-5 text-2xl font-semibold leading-tight tracking-[0.16em] text-terminal-500">
+          Monsters transferred successfully.
+        </h1>
+        <div className="mt-8 border border-red-300/25 bg-flossa-black/70 p-4">
+          <p className="protocol-error-glitch text-[12px] tracking-[0.22em] text-red-300">WARNING</p>
+          <p className="mt-4 text-xs leading-6 tracking-[0.14em] text-flossa-white/62">
+            Core entry exposed<br />
+            multiple hostile processes.
+          </p>
+          <p className="mt-4 text-xs leading-6 tracking-[0.14em] text-terminal-500/80">
+            Active bugs detected.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            playSystemSound('click')
+            onBegin()
+          }}
+          className="mt-8 h-14 w-full border border-terminal-500/55 bg-terminal-500 px-5 text-[12px] font-semibold tracking-[0.2em] text-flossa-black shadow-[0_0_34px_rgb(57_255_20_/_0.18)] transition duration-200 hover:bg-flossa-white focus:outline-none focus:ring-2 focus:ring-terminal-500 focus:ring-offset-2 focus:ring-offset-flossa-black active:scale-[0.98]"
+        >
+          INITIALIZE BUG PURGE
+        </button>
+      </section>
+    </main>
+  )
+}
+
+function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
+  const wasCompleted = window.localStorage.getItem(bugPurgeStorageKey) === 'true'
+  const initialBugs = bugPurgeInitialBugs.map((bug) => ({ ...bug, alive: wasCompleted ? false : bug.alive }))
+  const arenaRef = useRef<HTMLDivElement | null>(null)
+  const bugsRef = useRef<BugTarget[]>(initialBugs)
+  const projectilesRef = useRef<BugProjectile[]>([])
+  const lastFrameRef = useRef<number | null>(null)
+  const residualTimerRef = useRef<number | null>(null)
+  const [bugs, setBugs] = useState<BugTarget[]>(initialBugs)
+  const [projectiles, setProjectiles] = useState<BugProjectile[]>([])
+  const [bursts, setBursts] = useState<HitBurst[]>([])
+  const [hp, setHp] = useState(wasCompleted ? bugPurgeMinHp : 100)
+  const [damageHits, setDamageHits] = useState(wasCompleted ? bugPurgeTargetHits : 0)
+  const [shotPulse, setShotPulse] = useState(0)
+  const [damageFlash, setDamageFlash] = useState(false)
+  const [isResidualAttack, setIsResidualAttack] = useState(false)
+  const [isComplete, setIsComplete] = useState(wasCompleted)
+  const eliminated = bugs.filter((bug) => !bug.alive).length
+  const hpColor = hp <= 30 ? 'bg-red-400' : hp <= 60 ? 'bg-yellow-300' : 'bg-terminal-500'
+
+  function applyPlayerDamage() {
+    setDamageHits((currentHits) => {
+      if (currentHits >= bugPurgeTargetHits) {
+        return currentHits
+      }
+
+      const nextHits = currentHits + 1
+      setHp(Math.max(bugPurgeMinHp, 100 - nextHits * bugPurgeDamage))
+      setDamageFlash(true)
+      window.setTimeout(() => setDamageFlash(false), 140)
+      window.navigator.vibrate?.(22)
+      playSystemSound('error')
+      return nextHits
+    })
+  }
+
+  const maybeComplete = useCallback((nextEliminated = eliminated, nextDamageHits = damageHits) => {
+    if (nextEliminated < bugPurgeBugCount || nextDamageHits < bugPurgeTargetHits || isComplete) {
+      return
+    }
+
+    setHp(bugPurgeMinHp)
+    setIsComplete(true)
+    setIsResidualAttack(false)
+    if (residualTimerRef.current) {
+      window.clearInterval(residualTimerRef.current)
+      residualTimerRef.current = null
+    }
+    window.localStorage.setItem(bugPurgeStorageKey, 'true')
+    window.localStorage.setItem(bugPurgeHpStorageKey, bugPurgeMinHp.toString())
+    playSystemSound('success')
+  }, [damageHits, eliminated, isComplete])
+
+  function startResidualAttack() {
+    if (isResidualAttack || damageHits >= bugPurgeTargetHits) {
+      return
+    }
+
+    setIsResidualAttack(true)
+
+    residualTimerRef.current = window.setInterval(() => {
+      setDamageHits((currentHits) => {
+        if (currentHits >= bugPurgeTargetHits) {
+          if (residualTimerRef.current) {
+            window.clearInterval(residualTimerRef.current)
+            residualTimerRef.current = null
+          }
+          setHp(bugPurgeMinHp)
+          setIsResidualAttack(false)
+          maybeComplete(bugPurgeBugCount, bugPurgeTargetHits)
+          return currentHits
+        }
+
+        const nextHits = currentHits + 1
+        setHp(Math.max(bugPurgeMinHp, 100 - nextHits * bugPurgeDamage))
+        setDamageFlash(true)
+        window.setTimeout(() => setDamageFlash(false), 120)
+        window.navigator.vibrate?.(20)
+        return nextHits
+      })
+    }, 420)
+  }
+
+  function shootAt(clientX: number, clientY: number) {
+    if (isComplete) {
+      return
+    }
+
+    playSystemSound('click')
+    window.navigator.vibrate?.(18)
+    setShotPulse((pulse) => pulse + 1)
+
+    const arena = arenaRef.current?.getBoundingClientRect()
+    if (!arena) {
+      return
+    }
+
+    const x = ((clientX - arena.left) / arena.width) * 100
+    const y = ((clientY - arena.top) / arena.height) * 100
+    let hitBugId: number | null = null
+
+    for (const bug of bugsRef.current) {
+      if (!bug.alive) {
+        continue
+      }
+
+      if (Math.hypot(bug.x - x, bug.y - y) <= 8.5) {
+        hitBugId = bug.id
+        break
+      }
+    }
+
+    if (hitBugId === null) {
+      return
+    }
+
+    const nextBugs = bugsRef.current.map((bug) =>
+      bug.id === hitBugId ? { ...bug, alive: false } : bug,
+    )
+    const hitBug = bugsRef.current.find((bug) => bug.id === hitBugId)
+    bugsRef.current = nextBugs
+    setBugs(nextBugs)
+
+    if (hitBug) {
+      const burstId = Date.now()
+      setBursts((currentBursts) => [...currentBursts, { id: burstId, x: hitBug.x, y: hitBug.y }])
+      window.setTimeout(
+        () => setBursts((currentBursts) => currentBursts.filter((burst) => burst.id !== burstId)),
+        420,
+      )
+    }
+
+    const nextEliminated = nextBugs.filter((bug) => !bug.alive).length
+
+    if (nextEliminated === bugPurgeBugCount && damageHits < bugPurgeTargetHits) {
+      startResidualAttack()
+    } else {
+      maybeComplete(nextEliminated, damageHits)
+    }
+  }
+
+  useEffect(() => {
+    let frame = 0
+
+    function tick(timestamp: number) {
+      const lastFrame = lastFrameRef.current ?? timestamp
+      const deltaSeconds = Math.min(0.033, Math.max(0, (timestamp - lastFrame) / 1000))
+      lastFrameRef.current = timestamp
+
+      if (!isComplete) {
+        const nextBugs = bugsRef.current.map((bug) => {
+          if (!bug.alive) {
+            return bug
+          }
+
+          let nextX = bug.x + (bug.vx * deltaSeconds) / 5
+          let nextY = bug.y + (bug.vy * deltaSeconds) / 5
+          let nextVx = bug.vx
+          let nextVy = bug.vy
+          let nextCooldown = bug.shotCooldown - deltaSeconds
+
+          if (nextX < 8 || nextX > 92) {
+            nextVx *= -1
+            nextX = Math.min(92, Math.max(8, nextX))
+          }
+
+          if (nextY < 20 || nextY > 66) {
+            nextVy *= -1
+            nextY = Math.min(66, Math.max(20, nextY))
+          }
+
+          if (nextCooldown <= 0) {
+            projectilesRef.current = [
+              ...projectilesRef.current,
+              { id: Date.now() + bug.id, x: nextX, y: nextY + 4, vy: 38 + bug.id * 3 },
+            ]
+            nextCooldown = bugPurgeShotInterval + (bug.id % 3) * 0.34
+          }
+
+          return { ...bug, x: nextX, y: nextY, vx: nextVx, vy: nextVy, shotCooldown: nextCooldown }
+        })
+
+        bugsRef.current = nextBugs
+        setBugs(nextBugs)
+
+        const nextProjectiles: BugProjectile[] = []
+        projectilesRef.current.forEach((projectile) => {
+          const nextProjectile = { ...projectile, y: projectile.y + projectile.vy * deltaSeconds }
+
+          if (nextProjectile.y >= 88) {
+            applyPlayerDamage()
+            return
+          }
+
+          nextProjectiles.push(nextProjectile)
+        })
+        projectilesRef.current = nextProjectiles
+        setProjectiles(nextProjectiles)
+      }
+
+      frame = window.requestAnimationFrame(tick)
+    }
+
+    frame = window.requestAnimationFrame(tick)
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [isComplete])
+
+  useEffect(() => {
+    maybeComplete(eliminated, damageHits)
+  }, [eliminated, damageHits, maybeComplete])
+
+  useEffect(
+    () => () => {
+      if (residualTimerRef.current) {
+        window.clearInterval(residualTimerRef.current)
+      }
+    },
+    [],
+  )
+
+  return (
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-flossa-black px-4 pb-5 pt-[calc(104px+env(safe-area-inset-top))] text-flossa-white">
+      <div className="loading-grid absolute inset-0 opacity-30" />
+      <div className="scanlines absolute inset-0 opacity-20" />
+      {damageFlash ? <div className="bug-damage-flash pointer-events-none fixed inset-0 z-[65]" /> : null}
+
+      <section className="relative z-10 flex min-h-[calc(100dvh-132px)] w-full max-w-[430px] flex-col font-code uppercase">
+        <div className="mb-3">
+          <div className="flex items-center justify-between text-[10px] tracking-[0.22em] text-flossa-white/52">
+            <span>PROTOCOL 04C</span>
+            <span>BUG PURGE</span>
+          </div>
+          <h1 className="mt-2 text-2xl font-semibold tracking-[0.16em] text-terminal-500">BUG PURGE</h1>
+          <p className="mt-2 text-[10px] leading-4 tracking-[0.12em] text-flossa-white/56">
+            Seven hostile bugs detected inside the core. Eliminate all targets before system integrity fails.
+          </p>
+          <div className="mt-3 flex items-center justify-between text-[10px] tracking-[0.16em] text-flossa-white/62">
+            <span>SYSTEM INTEGRITY: {hp} HP</span>
+            <span>BUGS ELIMINATED: {eliminated} / {bugPurgeBugCount}</span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden border border-terminal-500/25 bg-flossa-graphite/70">
+            <div className={`h-full transition-[width] duration-200 ${hpColor}`} style={{ width: `${hp}%` }} />
+          </div>
+        </div>
+
+        <div
+          ref={arenaRef}
+          onPointerDown={(event) => shootAt(event.clientX, event.clientY)}
+          className="bug-arena relative flex-1 overflow-hidden border border-terminal-500/30 bg-flossa-black/78"
+        >
+          {bugs.map((bug) =>
+            bug.alive ? (
+              <button
+                key={bug.id}
+                type="button"
+                aria-label="hostile bug"
+                className="bug-target absolute"
+                style={{ left: `${bug.x}%`, top: `${bug.y}%` }}
+              >
+                <span>BUG</span>
+              </button>
+            ) : null,
+          )}
+
+          {projectiles.map((projectile) => (
+            <span
+              key={projectile.id}
+              className="bug-projectile absolute"
+              style={{ left: `${projectile.x}%`, top: `${projectile.y}%` }}
+            >
+              ERR
+            </span>
+          ))}
+
+          {bursts.map((burst) => (
+            <span
+              key={burst.id}
+              className="bug-hit-burst absolute"
+              style={{ left: `${burst.x}%`, top: `${burst.y}%` }}
+            />
+          ))}
+
+          {isResidualAttack ? (
+            <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 border border-red-300/35 bg-flossa-black/86 p-3 text-center text-[11px] tracking-[0.18em] text-red-300">
+              RESIDUAL ATTACK DETECTED
+            </div>
+          ) : null}
+
+          {isComplete ? (
+            <div className="absolute inset-4 flex items-center justify-center bg-flossa-black/82 text-center">
+              <div className="success-pulse border border-terminal-500/45 bg-terminal-500/10 p-5 text-[12px] leading-6 tracking-[0.16em] text-terminal-500">
+                <p>BUG PURGE COMPLETE</p>
+                <p>NO ACTIVE BUGS DETECTED</p>
+                <p>SYSTEM INTEGRITY CRITICAL: 10 HP</p>
+                <p>CORE SECURED</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSystemSound('click')
+                    onComplete()
+                  }}
+                  className="mt-5 h-12 w-full border border-terminal-500/55 bg-terminal-500 px-4 text-[11px] font-semibold tracking-[0.18em] text-flossa-black"
+                >
+                  CONTINUE RECOVERY
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className={`bug-weapon ${shotPulse ? 'bug-weapon-recoil' : ''}`} key={shotPulse}>
+            <div className="bug-muzzle-flash" />
+            <div className="bug-gun-barrel" />
+            <div className="bug-gun-body" />
+          </div>
+        </div>
       </section>
     </main>
   )

@@ -934,6 +934,223 @@
   }
 }
 
+.bug-arena {
+  min-height: min(62dvh, 560px);
+  touch-action: manipulation;
+  background-image:
+    linear-gradient(rgb(57 255 20 / 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(57 255 20 / 0.05) 1px, transparent 1px),
+    radial-gradient(circle at 50% 82%, rgb(57 255 20 / 0.16), transparent 34%),
+    linear-gradient(180deg, rgb(57 255 20 / 0.04), transparent 42%);
+  background-size:
+    32px 32px,
+    32px 32px,
+    100% 100%,
+    100% 100%;
+  box-shadow:
+    inset 0 0 34px rgb(57 255 20 / 0.08),
+    0 0 30px rgb(57 255 20 / 0.08);
+}
+
+.bug-target {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 42px;
+  border: 1px solid rgb(255 70 70 / 0.64);
+  border-radius: 48% 52% 42% 58%;
+  background:
+    radial-gradient(circle at 35% 35%, rgb(255 255 255 / 0.22), transparent 16%),
+    radial-gradient(circle at 50% 54%, rgb(255 70 70 / 0.9), rgb(62 7 12 / 0.9) 72%);
+  color: rgb(255 210 210);
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  text-shadow: 0 0 8px rgb(255 64 64 / 0.7);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 18px rgb(255 48 48 / 0.22);
+  animation: bug-hover 1.45s ease-in-out infinite;
+}
+
+.bug-target::before,
+.bug-target::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 1px;
+  background: rgb(255 92 92 / 0.78);
+  box-shadow:
+    0 -7px 0 rgb(255 92 92 / 0.5),
+    0 7px 0 rgb(255 92 92 / 0.5);
+}
+
+.bug-target::before {
+  left: -14px;
+  transform: rotate(-15deg);
+}
+
+.bug-target::after {
+  right: -14px;
+  transform: rotate(15deg);
+}
+
+.bug-target span {
+  pointer-events: none;
+  transform: translateY(1px);
+}
+
+.bug-projectile {
+  width: 34px;
+  height: 16px;
+  border: 1px solid rgb(255 70 70 / 0.55);
+  background: rgb(255 50 50 / 0.16);
+  color: rgb(255 120 120);
+  font-size: 8px;
+  line-height: 14px;
+  text-align: center;
+  letter-spacing: 0.08em;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 14px rgb(255 40 40 / 0.26);
+}
+
+.bug-hit-burst {
+  width: 62px;
+  height: 62px;
+  border: 1px solid rgb(57 255 20 / 0.72);
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  animation: bug-burst 420ms ease-out both;
+  box-shadow: 0 0 30px rgb(57 255 20 / 0.32);
+}
+
+.bug-damage-flash {
+  background:
+    radial-gradient(circle at 50% 50%, transparent 42%, rgb(255 0 0 / 0.22)),
+    rgb(255 0 0 / 0.08);
+  animation: bug-damage 140ms ease-out both;
+}
+
+.bug-weapon {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  width: 116px;
+  height: 92px;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 0 18px rgb(57 255 20 / 0.14));
+}
+
+.bug-weapon-recoil {
+  animation: bug-recoil 140ms ease-out;
+}
+
+.bug-gun-barrel {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 20px;
+  height: 56px;
+  border: 1px solid rgb(57 255 20 / 0.56);
+  background: linear-gradient(90deg, rgb(57 255 20 / 0.12), rgb(57 255 20 / 0.32), rgb(57 255 20 / 0.12));
+  transform: translateX(-50%);
+}
+
+.bug-gun-body {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 104px;
+  height: 46px;
+  border: 1px solid rgb(57 255 20 / 0.5);
+  background:
+    linear-gradient(135deg, rgb(57 255 20 / 0.2), rgb(4 10 7 / 0.95) 64%),
+    rgb(4 10 7);
+  transform: translateX(-50%);
+  clip-path: polygon(16% 0, 84% 0, 96% 34%, 74% 100%, 26% 100%, 4% 34%);
+}
+
+.bug-muzzle-flash {
+  position: absolute;
+  left: 50%;
+  top: -16px;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.9), rgb(57 255 20 / 0.7) 26%, transparent 68%);
+  opacity: 0;
+  transform: translateX(-50%);
+}
+
+.bug-weapon-recoil .bug-muzzle-flash {
+  animation: bug-muzzle 130ms ease-out;
+}
+
+@keyframes bug-hover {
+  0%,
+  100% {
+    filter: brightness(0.95);
+  }
+
+  50% {
+    filter: brightness(1.18);
+  }
+}
+
+@keyframes bug-burst {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.25);
+  }
+}
+
+@keyframes bug-damage {
+  from {
+    opacity: 0.85;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes bug-recoil {
+  0% {
+    transform: translateX(-50%) translateY(0) rotate(0deg);
+  }
+
+  45% {
+    transform: translateX(-50%) translateY(8px) rotate(-1deg);
+  }
+
+  100% {
+    transform: translateX(-50%) translateY(0) rotate(0deg);
+  }
+}
+
+@keyframes bug-muzzle {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.4);
+  }
+
+  35% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(1.4);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
