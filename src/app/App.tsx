@@ -4,6 +4,7 @@ import secureMessageAudio from '../assets/secure-message.mp3'
 import papalUnlockAudio from '../assets/papal-unlock.mp3'
 import dorotaHappyImage from '../assets/dorota-happy.png'
 import dorotaSadImage from '../assets/dorota-sad.png'
+import monsterRubyRedImage from '../assets/monster-ruby-red.png'
 import ownerImage from '../assets/owner.png'
 import ownerBallImage from '../assets/owner-ball.png'
 import popeImage from '../assets/pope.png'
@@ -237,6 +238,7 @@ export function App() {
       fetch(ownerBallImage, { cache: 'force-cache' }),
       fetch(dorotaSadImage, { cache: 'force-cache' }),
       fetch(dorotaHappyImage, { cache: 'force-cache' }),
+      fetch(monsterRubyRedImage, { cache: 'force-cache' }),
     ]).catch(() => undefined)
   }, [])
 
@@ -893,6 +895,11 @@ function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
                         : `TAP ${requiredPapalTaps - papalTapCount} MORE`}
                   </span>
                 ) : null}
+                {!isPapalUnlocked ? (
+                  <span className="tap-tap-hint absolute right-4 top-16 border border-terminal-500/45 bg-flossa-black/86 px-4 py-3 text-[11px] font-semibold tracking-[0.2em] text-terminal-500 shadow-[0_0_22px_rgb(57_255_20_/_0.18)]">
+                    {hasEnded ? 'TAP TAP' : 'LISTEN FIRST'}
+                  </span>
+                ) : null}
               </button>
             </div>
 
@@ -1242,8 +1249,11 @@ function Protocol03Screen({ onSuccess }: { onSuccess: () => void }) {
 }
 
 function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
+  const tokenRef = useRef<HTMLFormElement | null>(null)
+  const resultRef = useRef<HTMLDivElement | null>(null)
   const [answer, setAnswer] = useState('')
   const [status, setStatus] = useState<ProtocolStatus | 'token'>('idle')
+  const [showMonsterBoost, setShowMonsterBoost] = useState(false)
   const isTokenVisible = status === 'token' || status === 'success'
   const isLocked = status === 'validating' || status === 'verified' || status === 'success'
 
@@ -1255,6 +1265,9 @@ function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
   function handleMonster() {
     playSystemSound('beep')
     setStatus('token')
+    window.setTimeout(() => {
+      tokenRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 80)
   }
 
   function handleVerify(event: FormEvent<HTMLFormElement>) {
@@ -1266,7 +1279,21 @@ function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
       return
     }
 
-    completeValidation(setStatus, onSuccess)
+    setStatus('validating')
+    resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    window.setTimeout(() => {
+      setStatus('verified')
+      playSystemSound('beep')
+    }, 620)
+    window.setTimeout(() => {
+      setShowMonsterBoost(true)
+      playSystemSound('success')
+    }, 920)
+    window.setTimeout(() => {
+      setShowMonsterBoost(false)
+      setStatus('success')
+    }, 2200)
+    window.setTimeout(onSuccess, 2800)
   }
 
   return (
@@ -1361,7 +1388,7 @@ function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
         </div>
 
         {isTokenVisible ? (
-          <form onSubmit={handleVerify} className="mt-5 space-y-5 animate-fade-up">
+          <form ref={tokenRef} onSubmit={handleVerify} className="mt-5 space-y-5 animate-fade-up">
             <label className="block">
               <span className="mb-3 block text-[10px] tracking-[0.24em] text-flossa-white/50">
                 TOKEN INPUT
@@ -1390,7 +1417,7 @@ function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
           </form>
         ) : null}
 
-        <div className="mt-8 min-h-12 text-center">
+        <div ref={resultRef} className="mt-8 min-h-12 text-center">
           {status === 'validating' || status === 'verified' ? <ValidationSequence /> : null}
 
           {status === 'success' ? (
@@ -1402,6 +1429,17 @@ function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
           ) : null}
         </div>
       </section>
+
+      {showMonsterBoost ? (
+        <div className="monster-boost-popup pointer-events-none fixed inset-x-4 top-1/2 z-[70] mx-auto flex max-w-[390px] -translate-y-1/2 items-center gap-5 border border-terminal-500/55 bg-flossa-black/95 p-5 font-code uppercase text-terminal-500 shadow-[0_0_54px_rgb(57_255_20_/_0.28)]">
+          <img src={monsterRubyRedImage} alt="" className="h-40 w-24 object-contain drop-shadow-[0_0_22px_rgb(57_255_20_/_0.22)]" />
+          <div>
+            <p className="text-[10px] tracking-[0.24em] text-flossa-white/48">MONSTER BOOST</p>
+            <p className="mt-2 text-2xl font-semibold tracking-[0.16em]">+30 ENERGY</p>
+            <p className="mt-2 text-[10px] tracking-[0.18em] text-flossa-white/50">Recovery stamina restored.</p>
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }
@@ -1422,13 +1460,14 @@ type MotionBody = {
 }
 
 const motionBallSize = 50
-const motionHoleSize = 82
+const motionHoleSize = 118
+const motionHolePosition = { x: 0.76, y: 0.84 }
 const motionTiltStrength = 980
 const motionFallbackStrength = 820
 const motionFriction = 0.91
 const motionMaxSpeed = 620
 const motionDeadZone = 1.8
-const motionWinSpeed = 135
+const motionWinSpeed = 360
 const motionObstacles = [
   { x: 0.2, y: 0.22, width: 0.16, height: 0.02 },
   { x: 0.64, y: 0.22, width: 0.16, height: 0.02 },
@@ -1472,8 +1511,8 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
       rect,
       radius: motionBallSize / 2,
       hole: {
-        x: rect.width * 0.5,
-        y: rect.height * 0.82,
+        x: rect.width * motionHolePosition.x,
+        y: rect.height * motionHolePosition.y,
         radius: motionHoleSize / 2,
       },
     }
@@ -1554,7 +1593,7 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
       window.clearTimeout(successTimerRef.current)
     }
 
-    successTimerRef.current = window.setTimeout(() => setShowContinue(true), 1200)
+    successTimerRef.current = window.setTimeout(() => setShowContinue(true), 450)
   }
 
   function moveBody(deltaSeconds: number) {
@@ -1618,7 +1657,7 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
     }
 
     const holeDistance = Math.hypot(body.x - metrics.hole.x, body.y - metrics.hole.y)
-    const isInsideHole = holeDistance < metrics.hole.radius - metrics.radius * 0.18
+    const isInsideHole = holeDistance < metrics.hole.radius + metrics.radius * 0.28
     const isSlowEnough = Math.hypot(body.vx, body.vy) < motionWinSpeed
 
     if (isInsideHole && isSlowEnough) {
@@ -1785,9 +1824,22 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
               className="motion-board relative min-h-[64dvh] flex-1 overflow-hidden border border-terminal-500/30 bg-flossa-black/78 shadow-[0_0_46px_rgb(57_255_20_/_0.12)]"
             >
               <div
-                className="motion-hole absolute left-1/2 top-[82%] -translate-x-1/2 -translate-y-1/2 rounded-full"
-                style={{ height: `${motionHoleSize}px`, width: `${motionHoleSize}px` }}
+                className="motion-hole absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{
+                  height: `${motionHoleSize}px`,
+                  left: `${motionHolePosition.x * 100}%`,
+                  top: `${motionHolePosition.y * 100}%`,
+                  width: `${motionHoleSize}px`,
+                }}
               />
+              {mode !== 'complete' ? (
+                <div className="tilt-hint pointer-events-none absolute left-1/2 top-5 z-20 -translate-x-1/2 border border-terminal-500/35 bg-flossa-black/80 px-4 py-3 text-center shadow-[0_0_22px_rgb(57_255_20_/_0.14)]">
+                  <div className="tilt-phone mx-auto h-10 w-6 border border-terminal-500/45 bg-flossa-black/60 shadow-[0_0_18px_rgb(57_255_20_/_0.18)]" />
+                  <p className="mt-2 whitespace-nowrap text-[9px] tracking-[0.2em] text-terminal-500/80">
+                    TILT SIDE TO SIDE
+                  </p>
+                </div>
+              ) : null}
 
               {motionObstacles.map((obstacle, index) => (
                 <div
