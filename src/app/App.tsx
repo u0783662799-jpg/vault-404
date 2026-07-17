@@ -113,6 +113,10 @@ let coreRunMusicNodes:
       interval: number
     }
   | null = null
+const localAudioCache = new Map<string, HTMLAudioElement>()
+const localAudioLastPlayedAt = new Map<string, number>()
+let isAudioUnlocked = false
+let lastBugDamageSoundAt = 0
 
 function loadSavedScreen() {
   const savedScreen = window.localStorage.getItem(savedScreenKey)
@@ -148,7 +152,15 @@ function loadSavedDeadline() {
 }
 
 function getAudioContext() {
-  audioContext ??= new AudioContext()
+  const AudioContextConstructor =
+    window.AudioContext ??
+    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+
+  if (!AudioContextConstructor) {
+    throw new Error('AudioContext unavailable')
+  }
+
+  audioContext ??= new AudioContextConstructor()
   return audioContext
 }
 
@@ -156,11 +168,80 @@ function normalizeAnswer(answer: string) {
   return answer.trim().toLocaleUpperCase('pl-PL')
 }
 
-function playLocalAudio(src: string, volume = 0.7) {
+function getLocalAudio(src: string) {
+  const cachedAudio = localAudioCache.get(src)
+
+  if (cachedAudio) {
+    return cachedAudio
+  }
+
+  const audio = new Audio(src)
+  audio.preload = 'auto'
+  audio.setAttribute('playsinline', 'true')
+  localAudioCache.set(src, audio)
+  return audio
+}
+
+function unlockAudioSystem() {
+  if (isAudioUnlocked) {
+    void audioContext?.resume()
+    return
+  }
+
   try {
-    const audio = new Audio(src)
+    const context = getAudioContext()
+    void context.resume()
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    const now = context.currentTime
+
+    gain.gain.setValueAtTime(0.0001, now)
+    oscillator.frequency.value = 20
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start(now)
+    oscillator.stop(now + 0.025)
+
+    ;[bugGunshotAudio, bugPurgeCompleteAudio, papalUnlockAudio, secureMessageAudio].forEach((src) => {
+      const audio = getLocalAudio(src)
+      audio.muted = true
+      audio.volume = 0
+      void audio
+        .play()
+        .then(() => {
+          audio.pause()
+          audio.currentTime = 0
+          audio.muted = false
+        })
+        .catch(() => {
+          audio.muted = false
+        })
+    })
+
+    startAmbientSound()
+    isAudioUnlocked = true
+  } catch {
+    // Mobile browsers may still block audio until the next tap.
+  }
+}
+
+function playLocalAudio(src: string, volume = 0.7, minIntervalMs = 0) {
+  try {
+    unlockAudioSystem()
+    const now = Date.now()
+    const lastPlayedAt = localAudioLastPlayedAt.get(src) ?? 0
+
+    if (minIntervalMs > 0 && now - lastPlayedAt < minIntervalMs) {
+      return
+    }
+
+    const audio = getLocalAudio(src)
+    localAudioLastPlayedAt.set(src, now)
+    audio.pause()
+    audio.currentTime = 0
+    audio.muted = false
     audio.volume = volume
-    void audio.play()
+    void audio.play().catch(() => undefined)
   } catch {
     // Local audio is feedback only; gameplay must continue if the browser blocks it.
   }
@@ -225,6 +306,7 @@ function playTone(frequency: number, startAt: number, duration: number, volume =
 
 function playSystemSound(sound: SystemSound) {
   try {
+    unlockAudioSystem()
     const context = getAudioContext()
     void context.resume()
     startAmbientSound()
@@ -326,6 +408,20 @@ export function App() {
   const [updateServiceWorker, setUpdateServiceWorker] =
     useState<ReturnType<typeof registerSW> | null>(null)
   const timeLeft = Math.max(0, Math.ceil((deadlineAt - currentTime) / 1000))
+
+  useEffect(() => {
+    function unlockOnFirstGesture() {
+      unlockAudioSystem()
+    }
+
+    document.addEventListener('pointerdown', unlockOnFirstGesture, { capture: true })
+    document.addEventListener('touchstart', unlockOnFirstGesture, { capture: true, passive: true })
+
+    return () => {
+      document.removeEventListener('pointerdown', unlockOnFirstGesture, { capture: true })
+      document.removeEventListener('touchstart', unlockOnFirstGesture, { capture: true })
+    }
+  }, [])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -2611,7 +2707,6 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
   const wasCompleted = window.localStorage.getItem(bugPurgeStorageKey) === 'true'
   const initialBugs = bugPurgeInitialBugs.map((bug) => ({ ...bug, alive: wasCompleted ? false : bug.alive }))
   const arenaRef = useRef<HTMLDivElement | null>(null)
-  const completeAudioRef = useRef<HTMLAudioElement | null>(null)
   const bugsRef = useRef<BugTarget[]>(initialBugs)
   const projectilesRef = useRef<BugProjectile[]>([])
   const lastFrameRef = useRef<number | null>(null)
@@ -2639,7 +2734,11 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
       setDamageFlash(true)
       window.setTimeout(() => setDamageFlash(false), 140)
       window.navigator.vibrate?.(22)
-      playSystemSound('error')
+      const now = Date.now()
+      if (now - lastBugDamageSoundAt > 650) {
+        lastBugDamageSoundAt = now
+        playSystemSound('error')
+      }
       return nextHits
     })
   }
@@ -2659,13 +2758,7 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
     window.localStorage.setItem(bugPurgeStorageKey, 'true')
     window.localStorage.setItem(bugPurgeHpStorageKey, bugPurgeMinHp.toString())
     playSystemSound('success')
-    if (completeAudioRef.current) {
-      completeAudioRef.current.currentTime = 0
-      completeAudioRef.current.volume = 0.9
-      void completeAudioRef.current.play().catch(() => playLocalAudio(bugPurgeCompleteAudio, 0.9))
-    } else {
-      playLocalAudio(bugPurgeCompleteAudio, 0.9)
-    }
+    playLocalAudio(bugPurgeCompleteAudio, 0.9)
   }, [damageHits, eliminated, isComplete])
 
   function startResidualAttack() {
@@ -2731,7 +2824,7 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
       return
     }
 
-    playLocalAudio(bugGunshotAudio, 0.18)
+    playLocalAudio(bugGunshotAudio, 0.12, 520)
 
     const nextBugs = bugsRef.current.map((bug) =>
       bug.id === hitBugId ? { ...bug, alive: false } : bug,
@@ -2840,7 +2933,6 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
 
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-flossa-black px-4 pb-5 pt-[calc(104px+env(safe-area-inset-top))] text-flossa-white">
-      <audio ref={completeAudioRef} src={bugPurgeCompleteAudio} preload="auto" />
       <div className="loading-grid absolute inset-0 opacity-30" />
       <div className="scanlines absolute inset-0 opacity-20" />
       {damageFlash ? <div className="bug-damage-flash pointer-events-none fixed inset-0 z-[65]" /> : null}
