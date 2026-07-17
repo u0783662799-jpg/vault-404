@@ -1460,8 +1460,8 @@ type MotionBody = {
 }
 
 const motionBallSize = 50
-const motionHoleSize = 118
-const motionHolePosition = { x: 0.76, y: 0.84 }
+const motionHoleSize = 94
+const motionHolePosition = { x: 0.5, y: 0.9 }
 const motionTiltStrength = 980
 const motionFallbackStrength = 820
 const motionFriction = 0.91
@@ -1478,12 +1478,23 @@ const motionObstacles = [
   { x: 0.62, y: 0.57, width: 0.2, height: 0.02 },
   { x: 0.36, y: 0.72, width: 0.24, height: 0.02 },
 ]
+const motionMonsterPickups = [
+  { x: 0.28, y: 0.19 },
+  { x: 0.72, y: 0.19 },
+  { x: 0.14, y: 0.36 },
+  { x: 0.56, y: 0.36 },
+  { x: 0.86, y: 0.36 },
+  { x: 0.31, y: 0.54 },
+  { x: 0.72, y: 0.54 },
+  { x: 0.48, y: 0.69 },
+]
 
 function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
   const boardRef = useRef<HTMLDivElement | null>(null)
   const bodyRef = useRef<MotionBody>({ x: 0, y: 0, vx: 0, vy: 0, rotation: 0 })
   const tiltRef = useRef<MotionVector>({ x: 0, y: 0 })
   const fallbackVectorRef = useRef<MotionVector>({ x: 0, y: 0 })
+  const collectedPickupsRef = useRef<number[]>([])
   const lastFrameRef = useRef<number | null>(null)
   const hasOrientationEventRef = useRef(false)
   const successTimerRef = useRef<number | null>(null)
@@ -1495,7 +1506,13 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
   const [showContinue, setShowContinue] = useState(
     () => window.localStorage.getItem(motionCalibrationStorageKey) === 'true',
   )
+  const [collectedPickups, setCollectedPickups] = useState<number[]>([])
   const isPlaying = mode === 'motion' || mode === 'fallback'
+  const healthPoints = collectedPickups.length * 5
+
+  useEffect(() => {
+    collectedPickupsRef.current = collectedPickups
+  }, [collectedPickups])
 
   function getBoardMetrics() {
     const board = boardRef.current
@@ -1542,6 +1559,8 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
     setSensorMessage('')
     setShowContinue(false)
     window.localStorage.removeItem(motionCalibrationStorageKey)
+    setCollectedPickups([])
+    collectedPickupsRef.current = []
 
     if (typeof DeviceOrientationEvent === 'undefined') {
       setSensorMessage('MOTION SENSOR UNAVAILABLE')
@@ -1628,6 +1647,29 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
     body.x += body.vx * deltaSeconds
     body.y += body.vy * deltaSeconds
     body.rotation += (body.vx * deltaSeconds) / 10
+
+    const pickupHits: number[] = []
+    motionMonsterPickups.forEach((pickup, index) => {
+      if (collectedPickupsRef.current.includes(index)) {
+        return
+      }
+
+      const pickupX = pickup.x * metrics.width
+      const pickupY = pickup.y * metrics.height
+
+      if (Math.hypot(body.x - pickupX, body.y - pickupY) < metrics.radius + 20) {
+        pickupHits.push(index)
+      }
+    })
+
+    if (pickupHits.length > 0) {
+      setCollectedPickups((currentPickups) => [
+        ...currentPickups,
+        ...pickupHits.filter((pickupIndex) => !currentPickups.includes(pickupIndex)),
+      ])
+      playSystemSound('beep')
+      window.navigator.vibrate?.(18)
+    }
 
     body.x = Math.min(metrics.width - metrics.radius, Math.max(metrics.radius, body.x))
     body.y = Math.min(metrics.height - metrics.radius, Math.max(metrics.radius, body.y))
@@ -1814,8 +1856,11 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
           <>
             <div className="mb-3 flex items-center justify-between text-[10px] tracking-[0.2em] text-flossa-white/52">
               <span>PROTOCOL 04B</span>
-              <span>{mode === 'fallback' ? 'FALLBACK' : mode === 'complete' ? 'ALIGNED' : 'MOTION'}</span>
+              <span>HEALTH +{healthPoints}</span>
             </div>
+            <p className="mb-3 text-center text-[10px] tracking-[0.16em] text-terminal-500/75">
+              Collect as many Monsters as possible before entering the core.
+            </p>
 
             <div
               ref={boardRef}
@@ -1853,6 +1898,21 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
                   }}
                 />
               ))}
+
+              {motionMonsterPickups.map((pickup, index) =>
+                collectedPickups.includes(index) ? null : (
+                  <img
+                    key={index}
+                    src={monsterRubyRedImage}
+                    alt=""
+                    className="motion-pickup absolute z-10 h-9 w-6 -translate-x-1/2 -translate-y-1/2 object-contain"
+                    style={{
+                      left: `${pickup.x * 100}%`,
+                      top: `${pickup.y * 100}%`,
+                    }}
+                  />
+                ),
+              )}
 
               <img
                 src={ownerBallImage}
