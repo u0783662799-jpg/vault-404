@@ -12,7 +12,6 @@ import { registerSW } from 'virtual:pwa-register'
 import secureMessageAudio from '../assets/secure-message.mp3'
 import papalUnlockAudio from '../assets/papal-unlock.mp3'
 import bugPurgeCompleteAudio from '../assets/bug-purge-complete.mp3'
-import bugGunshotAudio from '../assets/bug-gunshot.mp3'
 import dorotaHappyImage from '../assets/dorota-happy.png'
 import dorotaSadImage from '../assets/dorota-sad.png'
 import coreRunBackgroundImage from '../assets/core-run-bg.png'
@@ -473,7 +472,6 @@ export function App() {
       fetch(secureMessageAudio, { cache: 'force-cache' }),
       fetch(papalUnlockAudio, { cache: 'force-cache' }),
       fetch(bugPurgeCompleteAudio, { cache: 'force-cache' }),
-      fetch(bugGunshotAudio, { cache: 'force-cache' }),
       fetch(popeImage, { cache: 'force-cache' }),
       fetch(ownerBallImage, { cache: 'force-cache' }),
       fetch(coreRunBackgroundImage, { cache: 'force-cache' }),
@@ -1153,9 +1151,9 @@ function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
                         : `TAP ${requiredPapalTaps - papalTapCount} MORE`}
                   </span>
                 ) : null}
-                {!isPapalUnlocked ? (
+                {hasEnded && !isPapalUnlocked ? (
                   <span className="tap-tap-hint absolute right-4 top-16 border border-terminal-500/45 bg-flossa-black/86 px-4 py-3 text-[11px] font-semibold tracking-[0.2em] text-terminal-500 shadow-[0_0_22px_rgb(57_255_20_/_0.18)]">
-                    {hasEnded ? 'TAP TAP' : 'LISTEN FIRST'}
+                    TAP TAP
                   </span>
                 ) : null}
               </button>
@@ -2106,8 +2104,8 @@ type MotionBody = {
 }
 
 const motionBallSize = 50
-const motionHoleSize = 94
-const motionHolePosition = { x: 0.5, y: 0.92 }
+const motionHoleSize = 66
+const motionHolePosition = { x: 0.9, y: 0.9 }
 const motionTiltStrength = 1380
 const motionFallbackStrength = 1120
 const motionFriction = 0.91
@@ -2346,7 +2344,8 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
     }
 
     const holeDistance = Math.hypot(body.x - metrics.hole.x, body.y - metrics.hole.y)
-    const isInsideHole = holeDistance < metrics.hole.radius + metrics.radius
+    const allPickupsCollected = collectedPickupsRef.current.length === motionMonsterPickups.length
+    const isInsideHole = allPickupsCollected && holeDistance < metrics.hole.radius + metrics.radius
 
     if (isInsideHole) {
       body.x += (metrics.hole.x - body.x) * 0.24
@@ -2515,7 +2514,7 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
               <span>HEALTH +{healthPoints}</span>
             </div>
             <p className="mb-3 text-center text-[10px] tracking-[0.16em] text-terminal-500/75">
-              Collect as many Monsters as possible before entering the core.
+              Collect all Monsters. The core breach opens only after every Monster is secured.
             </p>
 
             <div
@@ -2525,7 +2524,9 @@ function MotionCalibrationScreen({ onSuccess }: { onSuccess: () => void }) {
               className="motion-board relative min-h-[64dvh] flex-1 overflow-hidden border border-terminal-500/30 bg-flossa-black/78 shadow-[0_0_46px_rgb(57_255_20_/_0.12)]"
             >
               <div
-                className="motion-hole absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+                className={`motion-hole absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${
+                  collectedPickups.length === motionMonsterPickups.length ? 'motion-hole-open' : 'motion-hole-locked'
+                }`}
                 style={{
                   height: `${motionHoleSize}px`,
                   left: `${motionHolePosition.x * 100}%`,
@@ -2860,8 +2861,6 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
     if (hitBugId === null) {
       return
     }
-
-    playLocalAudio(bugGunshotAudio, 0.12, 520)
 
     const nextBugs = bugsRef.current.map((bug) =>
       bug.id === hitBugId ? { ...bug, alive: false } : bug,
