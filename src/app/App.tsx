@@ -1204,22 +1204,30 @@ type CoreRunObstacle = {
   id: number
   x: number
   kind: 'gap' | 'bug' | 'pipe'
+  width?: number
 }
 
 const coreRunBlocks: CoreRunBlock[] = [
-  { id: 0, x: 13, health: 10 },
-  { id: 1, x: 36, health: 20 },
-  { id: 2, x: 60, health: 30 },
-  { id: 3, x: 82, health: 40 },
+  { id: 0, x: 12, health: 10 },
+  { id: 1, x: 38, health: 20 },
+  { id: 2, x: 66, health: 30 },
+  { id: 3, x: 91, health: 40 },
 ]
 const coreRunObstacles: CoreRunObstacle[] = [
-  { id: 0, x: 25, kind: 'gap' },
-  { id: 1, x: 51, kind: 'bug' },
-  { id: 2, x: 72, kind: 'pipe' },
+  { id: 0, x: 25, kind: 'gap', width: 7 },
+  { id: 1, x: 52, kind: 'bug' },
+  { id: 2, x: 78, kind: 'pipe' },
+  { id: 3, x: 84, kind: 'gap', width: 6 },
 ]
-const coreRunDurationMs = 25000
+const coreRunGaps = coreRunObstacles.filter((obstacle) => obstacle.kind === 'gap')
+const coreRunGroundSegments = [
+  { start: -20, end: 25 - 3.5 },
+  { start: 25 + 3.5, end: 84 - 3 },
+  { start: 84 + 3, end: 124 },
+]
+const coreRunDurationMs = 38000
 const coreRunSpeed = 100 / (coreRunDurationMs / 1000)
-const coreRunJumpDurationMs = 880
+const coreRunJumpDurationMs = 1040
 
 function CoreRunIntroScreen({ onBegin }: { onBegin: () => void }) {
   return (
@@ -1269,7 +1277,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
   const [collected, setCollected] = useState<number[]>([])
   const [health, setHealth] = useState(0)
   const [healthPulse, setHealthPulse] = useState<number | null>(null)
-  const heroScale = 1 + collected.length * 0.13
+  const heroScale = 1 + collected.length * 0.18
 
   function resetRun() {
     playSystemSound('click')
@@ -1346,7 +1354,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
             return
           }
 
-          if (Math.abs(nextProgress - block.x) < 2.4 && nextJumpPower > 0.34) {
+          if (Math.abs(nextProgress - block.x) < 3.2 && nextJumpPower > 0.26) {
             collectedRef.current = [...collectedRef.current, block.id]
             setCollected(collectedRef.current)
             setHealth((currentHealth) => currentHealth + block.health)
@@ -1361,12 +1369,14 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
             return
           }
 
-          if (Math.abs(nextProgress - obstacle.x) > 1.65) {
+          const obstacleWindow = obstacle.kind === 'gap' ? 1.35 : 2.1
+
+          if (Math.abs(nextProgress - obstacle.x) > obstacleWindow) {
             return
           }
 
           if (obstacle.kind === 'bug') {
-            if (nextJumpPower > 0.28) {
+            if (nextJumpPower > 0.18) {
               clearedObstaclesRef.current = [...clearedObstaclesRef.current, obstacle.id]
               playSystemSound('beep')
               return
@@ -1376,7 +1386,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
             return
           }
 
-          if (nextJumpPower > 0.36) {
+          if (nextJumpPower > 0.2) {
             clearedObstaclesRef.current = [...clearedObstaclesRef.current, obstacle.id]
             return
           }
@@ -1414,7 +1424,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
         <div className="mb-3">
           <div className="flex items-center justify-between text-[10px] tracking-[0.22em] text-flossa-white/52">
             <span>CORE RUN</span>
-            <span>{Math.min(25, Math.floor(progress / coreRunSpeed))}S / 25S</span>
+            <span>{Math.min(38, Math.floor(progress / coreRunSpeed))}S / 38S</span>
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-[0.16em] text-terminal-500">CORE RUN</h1>
           <div className="mt-3 flex items-center justify-between text-[10px] tracking-[0.16em] text-flossa-white/62">
@@ -1424,11 +1434,33 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
         </div>
 
         <div className="core-run-stage relative flex-1 overflow-hidden border border-terminal-500/30 bg-flossa-black/78">
-          <div className="core-run-track absolute inset-x-0 bottom-[74px] h-1 bg-terminal-500/35" />
+          <div className="core-run-stars absolute inset-0" />
+          <div className="core-run-hills core-run-hills-back absolute inset-x-0 bottom-[98px]" style={{ transform: `translateX(${-progress * 0.18}%)` }} />
+          <div className="core-run-hills core-run-hills-front absolute inset-x-0 bottom-[80px]" style={{ transform: `translateX(${-progress * 0.34}%)` }} />
+          {coreRunGroundSegments.map((segment) => (
+            <div
+              key={`${segment.start}-${segment.end}`}
+              className="core-run-ground absolute"
+              style={{
+                left: `${22 + segment.start - progress}%`,
+                width: `${segment.end - segment.start}%`,
+              }}
+            />
+          ))}
+          {coreRunGaps.map((gap) => (
+            <div
+              key={gap.id}
+              className="core-run-gap-shadow absolute"
+              style={{
+                left: `${22 + gap.x - progress}%`,
+                width: `${gap.width ?? 6}%`,
+              }}
+            />
+          ))}
           <div
             className="core-run-hero absolute left-[22%]"
             style={{
-              bottom: `${77 + jumpPower * 118}px`,
+              bottom: `${98 + jumpPower * 142}px`,
               transform: `translateX(-50%) scale(${heroScale})`,
             }}
           >
@@ -1449,15 +1481,17 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
             )
           })}
 
-          {coreRunObstacles.map((obstacle) => (
-            <div
-              key={obstacle.id}
-              className={`core-run-obstacle core-run-obstacle-${obstacle.kind} absolute`}
-              style={{ left: `${22 + obstacle.x - progress}%` }}
-            >
-              {obstacle.kind === 'bug' ? <span>BUG</span> : null}
-            </div>
-          ))}
+          {coreRunObstacles
+            .filter((obstacle) => obstacle.kind !== 'gap')
+            .map((obstacle) => (
+              <div
+                key={obstacle.id}
+                className={`core-run-obstacle core-run-obstacle-${obstacle.kind} absolute`}
+                style={{ left: `${22 + obstacle.x - progress}%` }}
+              >
+                {obstacle.kind === 'bug' ? <span>BUG</span> : null}
+              </div>
+            ))}
 
           <div className="core-run-flag absolute" style={{ left: `${22 + 100 - progress}%` }}>
             <span />

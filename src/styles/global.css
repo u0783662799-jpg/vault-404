@@ -935,13 +935,17 @@
 }
 
 .core-run-stage {
-  min-height: min(56dvh, 520px);
+  min-height: min(62dvh, 560px);
   touch-action: manipulation;
   background-image:
-    linear-gradient(rgb(57 255 20 / 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(57 255 20 / 0.05) 1px, transparent 1px),
-    radial-gradient(circle at 50% 78%, rgb(57 255 20 / 0.12), transparent 38%);
+    radial-gradient(circle at 18% 14%, rgb(57 255 20 / 0.18) 0 2px, transparent 3px),
+    radial-gradient(circle at 74% 24%, rgb(57 255 20 / 0.12) 0 2px, transparent 3px),
+    linear-gradient(rgb(57 255 20 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(57 255 20 / 0.04) 1px, transparent 1px),
+    linear-gradient(180deg, rgb(4 13 10), rgb(0 0 0) 66%);
   background-size:
+    180px 120px,
+    240px 170px,
     34px 34px,
     34px 34px,
     100% 100%;
@@ -950,45 +954,147 @@
     0 0 30px rgb(57 255 20 / 0.08);
 }
 
+.core-run-stars {
+  background-image:
+    linear-gradient(90deg, transparent 0 70%, rgb(57 255 20 / 0.06) 70% 72%, transparent 72%),
+    radial-gradient(circle, rgb(57 255 20 / 0.24) 0 1px, transparent 2px);
+  background-size:
+    180px 100%,
+    78px 58px;
+  opacity: 0.5;
+}
+
+.core-run-hills {
+  height: 82px;
+  min-width: 180%;
+  pointer-events: none;
+}
+
+.core-run-hills-back {
+  opacity: 0.42;
+  background:
+    radial-gradient(ellipse at 14% 100%, rgb(57 255 20 / 0.16) 0 58px, transparent 59px),
+    radial-gradient(ellipse at 38% 100%, rgb(57 255 20 / 0.11) 0 70px, transparent 71px),
+    radial-gradient(ellipse at 68% 100%, rgb(57 255 20 / 0.14) 0 54px, transparent 55px),
+    radial-gradient(ellipse at 92% 100%, rgb(57 255 20 / 0.1) 0 68px, transparent 69px);
+}
+
+.core-run-hills-front {
+  opacity: 0.58;
+  background:
+    radial-gradient(ellipse at 10% 100%, rgb(57 255 20 / 0.2) 0 38px, transparent 39px),
+    radial-gradient(ellipse at 30% 100%, rgb(57 255 20 / 0.16) 0 46px, transparent 47px),
+    radial-gradient(ellipse at 62% 100%, rgb(57 255 20 / 0.18) 0 42px, transparent 43px),
+    radial-gradient(ellipse at 86% 100%, rgb(57 255 20 / 0.14) 0 50px, transparent 51px);
+}
+
+.core-run-ground {
+  bottom: 0;
+  height: 96px;
+  border-top: 2px solid rgb(57 255 20 / 0.72);
+  background:
+    linear-gradient(90deg, rgb(57 255 20 / 0.12) 1px, transparent 1px),
+    linear-gradient(rgb(57 255 20 / 0.1) 1px, transparent 1px),
+    linear-gradient(180deg, rgb(57 255 20 / 0.18), rgb(7 18 11 / 0.92));
+  background-size:
+    26px 26px,
+    26px 26px,
+    100% 100%;
+  box-shadow:
+    inset 0 12px 24px rgb(57 255 20 / 0.05),
+    0 -10px 24px rgb(57 255 20 / 0.07);
+}
+
+.core-run-gap-shadow {
+  bottom: 0;
+  height: 96px;
+  border-inline: 1px solid rgb(255 70 70 / 0.28);
+  background:
+    radial-gradient(ellipse at 50% 22%, rgb(255 70 70 / 0.18), transparent 56%),
+    linear-gradient(180deg, rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.92));
+  transform: translateX(-50%);
+  box-shadow: inset 0 20px 30px rgb(0 0 0 / 0.65);
+}
+
 .core-run-hero {
-  width: 34px;
-  height: 58px;
+  width: 42px;
+  height: 64px;
   transform-origin: 50% 100%;
   transition: transform 160ms ease;
   z-index: 8;
+  filter: drop-shadow(0 0 12px rgb(57 255 20 / 0.28));
 }
 
 .core-run-head {
-  width: 28px;
-  height: 28px;
+  position: relative;
+  width: 32px;
+  height: 30px;
   margin-inline: auto;
   border: 1px solid rgb(57 255 20 / 0.78);
-  border-radius: 999px;
-  background: rgb(57 255 20 / 0.13);
+  border-radius: 8px 8px 4px 4px;
+  background:
+    linear-gradient(90deg, transparent 0 15%, rgb(57 255 20 / 0.34) 15% 25%, transparent 25% 65%, rgb(57 255 20 / 0.34) 65% 75%, transparent 75%),
+    rgb(57 255 20 / 0.13);
   box-shadow: 0 0 16px rgb(57 255 20 / 0.24);
 }
 
+.core-run-head::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -8px;
+  width: 42px;
+  height: 10px;
+  border: 1px solid rgb(57 255 20 / 0.62);
+  background: rgb(57 255 20 / 0.18);
+}
+
 .core-run-body {
-  width: 24px;
-  height: 30px;
+  position: relative;
+  width: 30px;
+  height: 34px;
   margin-inline: auto;
   border: 1px solid rgb(57 255 20 / 0.64);
   border-top: 0;
-  background: linear-gradient(180deg, rgb(57 255 20 / 0.22), rgb(57 255 20 / 0.06));
+  background:
+    linear-gradient(90deg, transparent 0 18%, rgb(57 255 20 / 0.26) 18% 32%, transparent 32% 68%, rgb(57 255 20 / 0.26) 68% 82%, transparent 82%),
+    linear-gradient(180deg, rgb(57 255 20 / 0.22), rgb(57 255 20 / 0.06));
+}
+
+.core-run-body::before,
+.core-run-body::after {
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  width: 10px;
+  height: 8px;
+  background: rgb(57 255 20 / 0.28);
+}
+
+.core-run-body::before {
+  left: 2px;
+}
+
+.core-run-body::after {
+  right: 2px;
 }
 
 .core-run-block {
-  bottom: 190px;
+  bottom: 246px;
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 34px;
+  width: 48px;
+  height: 38px;
   border: 1px solid rgb(57 255 20 / 0.48);
-  background: rgb(57 255 20 / 0.12);
+  background:
+    linear-gradient(135deg, rgb(57 255 20 / 0.22), rgb(57 255 20 / 0.05)),
+    rgb(2 10 6);
   color: rgb(57 255 20);
   font-size: 18px;
   transform: translateX(-50%);
-  box-shadow: inset 0 0 18px rgb(57 255 20 / 0.08);
+  box-shadow:
+    inset 0 0 18px rgb(57 255 20 / 0.08),
+    0 0 20px rgb(57 255 20 / 0.08);
 }
 
 .core-run-block-hit {
@@ -1008,34 +1114,34 @@
 }
 
 .core-run-obstacle-gap {
-  bottom: 62px;
-  width: 58px;
-  height: 18px;
-  border: 1px solid rgb(255 70 70 / 0.5);
-  background: rgb(255 70 70 / 0.16);
-  box-shadow: 0 0 18px rgb(255 48 48 / 0.16);
+  display: none;
 }
 
 .core-run-obstacle-bug {
-  bottom: 76px;
+  bottom: 98px;
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 28px;
+  width: 46px;
+  height: 30px;
   border: 1px solid rgb(255 70 70 / 0.64);
   border-radius: 48% 52% 42% 58%;
-  background: rgb(255 50 50 / 0.16);
+  background:
+    radial-gradient(circle at 35% 35%, rgb(255 255 255 / 0.2), transparent 16%),
+    rgb(255 50 50 / 0.16);
   color: rgb(255 140 140);
   font-size: 8px;
   letter-spacing: 0.12em;
+  box-shadow: 0 0 16px rgb(255 48 48 / 0.16);
+  animation: core-bug-walk 560ms steps(2) infinite;
 }
 
 .core-run-obstacle-pipe {
-  bottom: 75px;
-  width: 46px;
-  height: 54px;
+  bottom: 96px;
+  width: 54px;
+  height: 70px;
   border: 1px solid rgb(57 255 20 / 0.46);
   background: linear-gradient(90deg, rgb(57 255 20 / 0.08), rgb(57 255 20 / 0.22), rgb(57 255 20 / 0.08));
+  box-shadow: inset 0 0 18px rgb(57 255 20 / 0.1);
 }
 
 .core-run-obstacle-pipe::before {
@@ -1050,11 +1156,22 @@
 }
 
 .core-run-flag {
-  bottom: 76px;
+  bottom: 96px;
   width: 54px;
   height: 104px;
   border-left: 2px solid rgb(57 255 20 / 0.75);
   transform: translateX(-50%);
+}
+
+@keyframes core-bug-walk {
+  0%,
+  100% {
+    border-radius: 48% 52% 42% 58%;
+  }
+
+  50% {
+    border-radius: 56% 44% 58% 42%;
+  }
 }
 
 .core-run-flag span {
