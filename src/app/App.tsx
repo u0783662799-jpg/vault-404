@@ -1280,22 +1280,22 @@ type CoreRunObstacle = {
 }
 
 const coreRunBlocks: CoreRunBlock[] = [
-  { id: 0, x: 10, health: 10, lane: 'ground' },
-  { id: 1, x: 28, health: 20, lane: 'air' },
-  { id: 2, x: 50, health: 30, lane: 'ground' },
-  { id: 3, x: 73, health: 40, lane: 'air' },
+  { id: 0, x: 18, health: 10, lane: 'ground' },
+  { id: 1, x: 65, health: 20, lane: 'air' },
+  { id: 2, x: 128, health: 30, lane: 'ground' },
+  { id: 3, x: 205, health: 40, lane: 'air' },
 ]
 const coreRunObstacles: CoreRunObstacle[] = [
-  { id: 0, x: 17, kind: 'bug' },
-  { id: 1, x: 34, kind: 'pipe' },
-  { id: 2, x: 43, kind: 'bug' },
-  { id: 3, x: 61, kind: 'bug' },
-  { id: 4, x: 82, kind: 'pipe' },
-  { id: 5, x: 91, kind: 'bug' },
+  { id: 0, x: 42, kind: 'pipe' },
+  { id: 1, x: 88, kind: 'bug' },
+  { id: 2, x: 118, kind: 'pipe' },
+  { id: 3, x: 166, kind: 'pipe' },
+  { id: 4, x: 196, kind: 'bug' },
 ]
-const coreRunDurationMs = 18000
-const coreRunSpeed = 100 / (coreRunDurationMs / 1000)
-const coreRunJumpDurationMs = 840
+const coreRunFinishX = 235
+const coreRunDurationMs = 28000
+const coreRunSpeed = coreRunFinishX / (coreRunDurationMs / 1000)
+const coreRunJumpDurationMs = 820
 
 function CoreRunIntroScreen({ onBegin }: { onBegin: () => void }) {
   return (
@@ -1347,7 +1347,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
   const [health, setHealth] = useState(0)
   const [healthPulse, setHealthPulse] = useState<number | null>(null)
   const [showCompletePanel, setShowCompletePanel] = useState(false)
-  const heroScale = 0.82 + collected.length * 0.12
+  const heroScale = 0.92 + collected.length * 0.24
 
   function resetRun() {
     playSystemSound('click')
@@ -1386,7 +1386,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
 
     modeRef.current = 'complete'
     setMode('complete')
-    setProgress(100)
+    setProgress(coreRunFinishX)
     stopCoreRunMusic()
     playSystemSound('success')
     window.setTimeout(() => setShowCompletePanel(true), 760)
@@ -1410,7 +1410,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
       lastFrameRef.current = timestamp
 
       if (modeRef.current === 'running') {
-        const nextProgress = Math.min(100, progressRef.current + coreRunSpeed * deltaSeconds)
+        const nextProgress = Math.min(coreRunFinishX, progressRef.current + coreRunSpeed * deltaSeconds)
         progressRef.current = nextProgress
         setProgress(nextProgress)
 
@@ -1477,7 +1477,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
           failRun()
         })
 
-        if (nextProgress >= 99.6) {
+        if (nextProgress >= coreRunFinishX - 0.6) {
           if (collectedRef.current.length === coreRunBlocks.length) {
             completeRun()
           } else {
@@ -1509,7 +1509,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
         <div className="mb-3">
           <div className="flex items-center justify-between text-[10px] tracking-[0.22em] text-flossa-white/52">
             <span>CORE RUN</span>
-            <span>{Math.min(18, Math.floor(progress / coreRunSpeed))}S / 18S</span>
+            <span>{Math.min(28, Math.floor(progress / coreRunSpeed))}S / 28S</span>
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-[0.16em] text-terminal-500">CORE RUN</h1>
           <div className="mt-3 flex items-center justify-between text-[10px] tracking-[0.16em] text-flossa-white/62">
@@ -1523,7 +1523,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
             src={coreRunBackgroundImage}
             alt=""
             className="core-run-bg-img absolute inset-0 h-full w-full object-cover"
-            style={{ transform: `translateX(${-progress * 0.08}%) scale(1.08)` }}
+            style={{ transform: `translateX(${-progress * 0.045}%) scale(1.08)` }}
           />
           <div className="core-run-stars absolute inset-0" />
           <div className="core-run-hills core-run-hills-back absolute inset-x-0 bottom-[98px]" style={{ transform: `translateX(${-progress * 0.18}%)` }} />
@@ -1569,7 +1569,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
 
           <div
             className={`core-run-flag absolute ${mode === 'complete' ? 'core-run-flag-raised' : ''}`}
-            style={{ left: `${20 + 100 - progress}%` }}
+            style={{ left: `${20 + coreRunFinishX - progress}%` }}
           >
             <span />
           </div>
@@ -1581,7 +1581,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
           ) : null}
 
           {mode === 'failed' ? (
-            <div className="absolute inset-4 flex items-center justify-center bg-flossa-black/84 text-center">
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-flossa-black/95 p-4 text-center">
               <div className="border border-red-300/40 bg-flossa-black/90 p-5 text-[12px] leading-6 tracking-[0.16em] text-red-300">
                 <p className="protocol-error-glitch">SYSTEM FAILURE</p>
                 <p className="mt-3 text-flossa-white/62">Repository rolled back.</p>
@@ -1597,7 +1597,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
           ) : null}
 
           {mode === 'complete' && showCompletePanel ? (
-            <div className="absolute inset-4 flex items-center justify-center bg-flossa-black/84 text-center">
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-flossa-black/95 p-4 text-center">
               <div className="success-pulse border border-terminal-500/45 bg-terminal-500/10 p-5 text-[12px] leading-6 tracking-[0.16em] text-terminal-500">
                 <p>CORE RUN COMPLETE</p>
                 <p className="text-flossa-white/64">Energy successfully recovered.</p>
