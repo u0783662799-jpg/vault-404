@@ -15,6 +15,8 @@ import bugPurgeCompleteAudio from '../assets/bug-purge-complete.mp3'
 import bugGunshotAudio from '../assets/bug-gunshot.mp3'
 import dorotaHappyImage from '../assets/dorota-happy.png'
 import dorotaSadImage from '../assets/dorota-sad.png'
+import coreRunBackgroundImage from '../assets/core-run-bg.png'
+import coreRunHeroImage from '../assets/core-run-hero.png'
 import monsterRubyRedImage from '../assets/monster-ruby-red.png'
 import ownerImage from '../assets/owner.png'
 import ownerBallImage from '../assets/owner-ball.png'
@@ -102,6 +104,13 @@ let ambientNodes:
       modulatorGain: GainNode
       filter: BiquadFilterNode
       gain: GainNode
+    }
+  | null = null
+let coreRunMusicNodes:
+  | {
+      oscillators: OscillatorNode[]
+      gain: GainNode
+      interval: number
     }
   | null = null
 
@@ -246,6 +255,67 @@ function playSystemSound(sound: SystemSound) {
   }
 }
 
+function startCoreRunMusic() {
+  try {
+    if (coreRunMusicNodes) {
+      void getAudioContext().resume()
+      return
+    }
+
+    const context = getAudioContext()
+    void context.resume()
+
+    const gain = context.createGain()
+    gain.gain.value = 0.018
+    gain.connect(context.destination)
+
+    const melody = [523, 659, 784, 659, 880, 784, 659, 587]
+    let step = 0
+    const oscillators: OscillatorNode[] = []
+
+    const playStep = () => {
+      const now = context.currentTime
+      const oscillator = context.createOscillator()
+      const noteGain = context.createGain()
+
+      oscillator.type = step % 4 === 0 ? 'square' : 'triangle'
+      oscillator.frequency.value = melody[step % melody.length]
+      noteGain.gain.setValueAtTime(0.0001, now)
+      noteGain.gain.exponentialRampToValueAtTime(0.55, now + 0.01)
+      noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13)
+      oscillator.connect(noteGain)
+      noteGain.connect(gain)
+      oscillator.start(now)
+      oscillator.stop(now + 0.15)
+      oscillators.push(oscillator)
+      step += 1
+    }
+
+    playStep()
+    const interval = window.setInterval(playStep, 180)
+    coreRunMusicNodes = { oscillators, gain, interval }
+  } catch {
+    // Runner music is optional and must not block gameplay.
+  }
+}
+
+function stopCoreRunMusic() {
+  if (!coreRunMusicNodes) {
+    return
+  }
+
+  window.clearInterval(coreRunMusicNodes.interval)
+  coreRunMusicNodes.gain.disconnect()
+  coreRunMusicNodes.oscillators.forEach((oscillator) => {
+    try {
+      oscillator.stop()
+    } catch {
+      // Some short notes may already be stopped.
+    }
+  })
+  coreRunMusicNodes = null
+}
+
 export function App() {
   const [screen, setScreen] = useState<AppScreen>(loadSavedScreen)
   const [transitionTarget, setTransitionTarget] = useState<AppScreen>('protocol-01')
@@ -273,6 +343,8 @@ export function App() {
       fetch(bugGunshotAudio, { cache: 'force-cache' }),
       fetch(popeImage, { cache: 'force-cache' }),
       fetch(ownerBallImage, { cache: 'force-cache' }),
+      fetch(coreRunBackgroundImage, { cache: 'force-cache' }),
+      fetch(coreRunHeroImage, { cache: 'force-cache' }),
       fetch(dorotaSadImage, { cache: 'force-cache' }),
       fetch(dorotaHappyImage, { cache: 'force-cache' }),
       fetch(monsterRubyRedImage, { cache: 'force-cache' }),
@@ -1198,36 +1270,32 @@ type CoreRunBlock = {
   id: number
   x: number
   health: number
+  lane: 'ground' | 'air'
 }
 
 type CoreRunObstacle = {
   id: number
   x: number
-  kind: 'gap' | 'bug' | 'pipe'
-  width?: number
+  kind: 'bug' | 'pipe'
 }
 
 const coreRunBlocks: CoreRunBlock[] = [
-  { id: 0, x: 12, health: 10 },
-  { id: 1, x: 38, health: 20 },
-  { id: 2, x: 66, health: 30 },
-  { id: 3, x: 91, health: 40 },
+  { id: 0, x: 10, health: 10, lane: 'ground' },
+  { id: 1, x: 28, health: 20, lane: 'air' },
+  { id: 2, x: 50, health: 30, lane: 'ground' },
+  { id: 3, x: 73, health: 40, lane: 'air' },
 ]
 const coreRunObstacles: CoreRunObstacle[] = [
-  { id: 0, x: 25, kind: 'gap', width: 7 },
-  { id: 1, x: 52, kind: 'bug' },
-  { id: 2, x: 78, kind: 'pipe' },
-  { id: 3, x: 84, kind: 'gap', width: 6 },
+  { id: 0, x: 17, kind: 'bug' },
+  { id: 1, x: 34, kind: 'pipe' },
+  { id: 2, x: 43, kind: 'bug' },
+  { id: 3, x: 61, kind: 'bug' },
+  { id: 4, x: 82, kind: 'pipe' },
+  { id: 5, x: 91, kind: 'bug' },
 ]
-const coreRunGaps = coreRunObstacles.filter((obstacle) => obstacle.kind === 'gap')
-const coreRunGroundSegments = [
-  { start: -20, end: 25 - 3.5 },
-  { start: 25 + 3.5, end: 84 - 3 },
-  { start: 84 + 3, end: 124 },
-]
-const coreRunDurationMs = 38000
+const coreRunDurationMs = 30000
 const coreRunSpeed = 100 / (coreRunDurationMs / 1000)
-const coreRunJumpDurationMs = 1040
+const coreRunJumpDurationMs = 980
 
 function CoreRunIntroScreen({ onBegin }: { onBegin: () => void }) {
   return (
@@ -1277,10 +1345,12 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
   const [collected, setCollected] = useState<number[]>([])
   const [health, setHealth] = useState(0)
   const [healthPulse, setHealthPulse] = useState<number | null>(null)
-  const heroScale = 1 + collected.length * 0.18
+  const [showCompletePanel, setShowCompletePanel] = useState(false)
+  const heroScale = 0.82 + collected.length * 0.12
 
   function resetRun() {
     playSystemSound('click')
+    startCoreRunMusic()
     progressRef.current = 0
     jumpStartedAtRef.current = null
     collectedRef.current = []
@@ -1292,6 +1362,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
     setCollected([])
     setHealth(0)
     setHealthPulse(null)
+    setShowCompletePanel(false)
     setMode('running')
   }
 
@@ -1302,6 +1373,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
 
     modeRef.current = 'failed'
     setMode('failed')
+    stopCoreRunMusic()
     playSystemSound('error')
   }
 
@@ -1313,7 +1385,9 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
     modeRef.current = 'complete'
     setMode('complete')
     setProgress(100)
+    stopCoreRunMusic()
     playSystemSound('success')
+    window.setTimeout(() => setShowCompletePanel(true), 760)
   }
 
   function handleJump() {
@@ -1354,7 +1428,12 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
             return
           }
 
-          if (Math.abs(nextProgress - block.x) < 3.2 && nextJumpPower > 0.26) {
+          const canCollect =
+            block.lane === 'ground'
+              ? nextJumpPower < 0.46
+              : nextJumpPower > 0.26
+
+          if (Math.abs(nextProgress - block.x) < 3.4 && canCollect) {
             collectedRef.current = [...collectedRef.current, block.id]
             setCollected(collectedRef.current)
             setHealth((currentHealth) => currentHealth + block.health)
@@ -1369,14 +1448,14 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
             return
           }
 
-          const obstacleWindow = obstacle.kind === 'gap' ? 1.35 : 2.1
+          const obstacleWindow = obstacle.kind === 'pipe' ? 2.25 : 2.05
 
           if (Math.abs(nextProgress - obstacle.x) > obstacleWindow) {
             return
           }
 
           if (obstacle.kind === 'bug') {
-            if (nextJumpPower > 0.18) {
+            if (nextJumpPower > 0.2) {
               clearedObstaclesRef.current = [...clearedObstaclesRef.current, obstacle.id]
               playSystemSound('beep')
               return
@@ -1386,7 +1465,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
             return
           }
 
-          if (nextJumpPower > 0.2) {
+          if (nextJumpPower > 0.34) {
             clearedObstaclesRef.current = [...clearedObstaclesRef.current, obstacle.id]
             return
           }
@@ -1407,11 +1486,13 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
     }
 
     frameRef.current = window.requestAnimationFrame(tick)
+    startCoreRunMusic()
 
     return () => {
       if (frameRef.current) {
         window.cancelAnimationFrame(frameRef.current)
       }
+      stopCoreRunMusic()
     }
   }, [])
 
@@ -1424,7 +1505,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
         <div className="mb-3">
           <div className="flex items-center justify-between text-[10px] tracking-[0.22em] text-flossa-white/52">
             <span>CORE RUN</span>
-            <span>{Math.min(38, Math.floor(progress / coreRunSpeed))}S / 38S</span>
+            <span>{Math.min(30, Math.floor(progress / coreRunSpeed))}S / 30S</span>
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-[0.16em] text-terminal-500">CORE RUN</h1>
           <div className="mt-3 flex items-center justify-between text-[10px] tracking-[0.16em] text-flossa-white/62">
@@ -1434,38 +1515,24 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
         </div>
 
         <div className="core-run-stage relative flex-1 overflow-hidden border border-terminal-500/30 bg-flossa-black/78">
+          <img
+            src={coreRunBackgroundImage}
+            alt=""
+            className="core-run-bg-img absolute inset-0 h-full w-full object-cover"
+            style={{ transform: `translateX(${-progress * 0.08}%) scale(1.08)` }}
+          />
           <div className="core-run-stars absolute inset-0" />
           <div className="core-run-hills core-run-hills-back absolute inset-x-0 bottom-[98px]" style={{ transform: `translateX(${-progress * 0.18}%)` }} />
           <div className="core-run-hills core-run-hills-front absolute inset-x-0 bottom-[80px]" style={{ transform: `translateX(${-progress * 0.34}%)` }} />
-          {coreRunGroundSegments.map((segment) => (
-            <div
-              key={`${segment.start}-${segment.end}`}
-              className="core-run-ground absolute"
-              style={{
-                left: `${22 + segment.start - progress}%`,
-                width: `${segment.end - segment.start}%`,
-              }}
-            />
-          ))}
-          {coreRunGaps.map((gap) => (
-            <div
-              key={gap.id}
-              className="core-run-gap-shadow absolute"
-              style={{
-                left: `${22 + gap.x - progress}%`,
-                width: `${gap.width ?? 6}%`,
-              }}
-            />
-          ))}
+          <div className="core-run-ground absolute inset-x-0" />
           <div
-            className="core-run-hero absolute left-[22%]"
+            className="core-run-hero absolute left-[20%]"
             style={{
-              bottom: `${98 + jumpPower * 142}px`,
+              bottom: `${94 + jumpPower * 134}px`,
               transform: `translateX(-50%) scale(${heroScale})`,
             }}
           >
-            <div className="core-run-head" />
-            <div className="core-run-body" />
+            <img src={coreRunHeroImage} alt="" draggable={false} />
           </div>
 
           {coreRunBlocks.map((block) => {
@@ -1473,27 +1540,31 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
             return (
               <div
                 key={block.id}
-                className={`core-run-block absolute ${isCollected ? 'core-run-block-hit' : ''}`}
-                style={{ left: `${22 + block.x - progress}%` }}
+                className={`core-run-monster absolute ${isCollected ? 'core-run-monster-collected' : ''}`}
+                style={{
+                  bottom: block.lane === 'air' ? '206px' : '102px',
+                  left: `${20 + block.x - progress}%`,
+                }}
               >
-                {!isCollected ? <span>?</span> : <img src={monsterRubyRedImage} alt="" />}
+                {!isCollected ? <img src={monsterRubyRedImage} alt="" /> : null}
               </div>
             )
           })}
 
-          {coreRunObstacles
-            .filter((obstacle) => obstacle.kind !== 'gap')
-            .map((obstacle) => (
-              <div
-                key={obstacle.id}
-                className={`core-run-obstacle core-run-obstacle-${obstacle.kind} absolute`}
-                style={{ left: `${22 + obstacle.x - progress}%` }}
-              >
-                {obstacle.kind === 'bug' ? <span>BUG</span> : null}
-              </div>
-            ))}
+          {coreRunObstacles.map((obstacle) => (
+            <div
+              key={obstacle.id}
+              className={`core-run-obstacle core-run-obstacle-${obstacle.kind} absolute`}
+              style={{ left: `${20 + obstacle.x - progress}%` }}
+            >
+              {obstacle.kind === 'bug' ? <span>BUG</span> : null}
+            </div>
+          ))}
 
-          <div className="core-run-flag absolute" style={{ left: `${22 + 100 - progress}%` }}>
+          <div
+            className={`core-run-flag absolute ${mode === 'complete' ? 'core-run-flag-raised' : ''}`}
+            style={{ left: `${20 + 100 - progress}%` }}
+          >
             <span />
           </div>
 
@@ -1519,7 +1590,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
             </div>
           ) : null}
 
-          {mode === 'complete' ? (
+          {mode === 'complete' && showCompletePanel ? (
             <div className="absolute inset-4 flex items-center justify-center bg-flossa-black/84 text-center">
               <div className="success-pulse border border-terminal-500/45 bg-terminal-500/10 p-5 text-[12px] leading-6 tracking-[0.16em] text-terminal-500">
                 <p>CORE RUN COMPLETE</p>
