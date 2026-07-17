@@ -114,6 +114,8 @@ let coreRunMusicNodes:
     }
   | null = null
 const localAudioCache = new Map<string, HTMLAudioElement>()
+const decodedAudioCache = new Map<string, AudioBuffer>()
+const decodedAudioPromises = new Map<string, Promise<AudioBuffer>>()
 const localAudioLastPlayedAt = new Map<string, number>()
 let isAudioUnlocked = false
 let lastBugDamageSoundAt = 0
@@ -202,27 +204,37 @@ function unlockAudioSystem() {
     oscillator.start(now)
     oscillator.stop(now + 0.025)
 
-    ;[bugGunshotAudio, bugPurgeCompleteAudio, papalUnlockAudio, secureMessageAudio].forEach((src) => {
-      const audio = getLocalAudio(src)
-      audio.muted = true
-      audio.volume = 0
-      void audio
-        .play()
-        .then(() => {
-          audio.pause()
-          audio.currentTime = 0
-          audio.muted = false
-        })
-        .catch(() => {
-          audio.muted = false
-        })
-    })
-
     startAmbientSound()
     isAudioUnlocked = true
   } catch {
     // Mobile browsers may still block audio until the next tap.
   }
+}
+
+function getDecodedAudio(src: string) {
+  const decodedAudio = decodedAudioCache.get(src)
+
+  if (decodedAudio) {
+    return Promise.resolve(decodedAudio)
+  }
+
+  const pendingDecode = decodedAudioPromises.get(src)
+
+  if (pendingDecode) {
+    return pendingDecode
+  }
+
+  const decodePromise = fetch(src)
+    .then((response) => response.arrayBuffer())
+    .then((arrayBuffer) => getAudioContext().decodeAudioData(arrayBuffer))
+    .then((audioBuffer) => {
+      decodedAudioCache.set(src, audioBuffer)
+      decodedAudioPromises.delete(src)
+      return audioBuffer
+    })
+
+  decodedAudioPromises.set(src, decodePromise)
+  return decodePromise
 }
 
 function playLocalAudio(src: string, volume = 0.7, minIntervalMs = 0) {
@@ -235,13 +247,29 @@ function playLocalAudio(src: string, volume = 0.7, minIntervalMs = 0) {
       return
     }
 
-    const audio = getLocalAudio(src)
     localAudioLastPlayedAt.set(src, now)
-    audio.pause()
-    audio.currentTime = 0
-    audio.muted = false
-    audio.volume = volume
-    void audio.play().catch(() => undefined)
+    const context = getAudioContext()
+
+    void context
+      .resume()
+      .then(() => getDecodedAudio(src))
+      .then((audioBuffer) => {
+        const source = context.createBufferSource()
+        const gain = context.createGain()
+        source.buffer = audioBuffer
+        gain.gain.value = volume
+        source.connect(gain)
+        gain.connect(context.destination)
+        source.start()
+      })
+      .catch(() => {
+        const audio = getLocalAudio(src)
+        audio.pause()
+        audio.currentTime = 0
+        audio.muted = false
+        audio.volume = volume
+        void audio.play().catch(() => undefined)
+      })
   } catch {
     // Local audio is feedback only; gameplay must continue if the browser blocks it.
   }
@@ -306,32 +334,41 @@ function playTone(frequency: number, startAt: number, duration: number, volume =
 
 function playSystemSound(sound: SystemSound) {
   try {
-    unlockAudioSystem()
     const context = getAudioContext()
-    void context.resume()
-    startAmbientSound()
-    const now = context.currentTime
+    unlockAudioSystem()
 
-    if (sound === 'click') {
-      playTone(880, now, 0.035, 0.025)
+    const play = () => {
+      startAmbientSound()
+      const now = context.currentTime + 0.01
+
+      if (sound === 'click') {
+        playTone(880, now, 0.035, 0.025)
+        return
+      }
+
+      if (sound === 'beep') {
+        playTone(660, now, 0.055)
+        return
+      }
+
+      if (sound === 'error') {
+        window.navigator.vibrate?.([42, 28, 42])
+        playTone(180, now, 0.08, 0.045)
+        playTone(140, now + 0.095, 0.09, 0.04)
+        return
+      }
+
+      playTone(520, now, 0.06, 0.035)
+      playTone(780, now + 0.07, 0.07, 0.04)
+      playTone(1040, now + 0.15, 0.11, 0.045)
+    }
+
+    if (context.state === 'running') {
+      play()
       return
     }
 
-    if (sound === 'beep') {
-      playTone(660, now, 0.055)
-      return
-    }
-
-    if (sound === 'error') {
-      window.navigator.vibrate?.([42, 28, 42])
-      playTone(180, now, 0.08, 0.045)
-      playTone(140, now + 0.095, 0.09, 0.04)
-      return
-    }
-
-    playTone(520, now, 0.06, 0.035)
-    playTone(780, now + 0.07, 0.07, 0.04)
-    playTone(1040, now + 0.15, 0.11, 0.045)
+    void context.resume().then(play).catch(() => undefined)
   } catch {
     // Audio can be blocked until a user gesture; silently keep the UI flow intact.
   }
