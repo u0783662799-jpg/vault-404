@@ -11,6 +11,8 @@ import {
 import { registerSW } from 'virtual:pwa-register'
 import secureMessageAudio from '../assets/secure-message.mp3'
 import papalUnlockAudio from '../assets/papal-unlock.mp3'
+import bugPurgeCompleteAudio from '../assets/bug-purge-complete.mp3'
+import bugGunshotAudio from '../assets/bug-gunshot.mp3'
 import dorotaHappyImage from '../assets/dorota-happy.png'
 import dorotaSadImage from '../assets/dorota-sad.png'
 import monsterRubyRedImage from '../assets/monster-ruby-red.png'
@@ -137,6 +139,20 @@ function getAudioContext() {
   return audioContext
 }
 
+function normalizeAnswer(answer: string) {
+  return answer.trim().toLocaleUpperCase('pl-PL')
+}
+
+function playLocalAudio(src: string, volume = 0.7) {
+  try {
+    const audio = new Audio(src)
+    audio.volume = volume
+    void audio.play()
+  } catch {
+    // Local audio is feedback only; gameplay must continue if the browser blocks it.
+  }
+}
+
 function startAmbientSound() {
   try {
     if (ambientNodes) {
@@ -249,6 +265,8 @@ export function App() {
     void Promise.all([
       fetch(secureMessageAudio, { cache: 'force-cache' }),
       fetch(papalUnlockAudio, { cache: 'force-cache' }),
+      fetch(bugPurgeCompleteAudio, { cache: 'force-cache' }),
+      fetch(bugGunshotAudio, { cache: 'force-cache' }),
       fetch(popeImage, { cache: 'force-cache' }),
       fetch(ownerBallImage, { cache: 'force-cache' }),
       fetch(dorotaSadImage, { cache: 'force-cache' }),
@@ -984,7 +1002,7 @@ function Protocol01Screen({ onSuccess }: { onSuccess: () => void }) {
     event.preventDefault()
     playSystemSound('click')
 
-    if (answer.trim().toUpperCase() !== 'V404-2718') {
+    if (normalizeAnswer(answer) !== 'V404-2718') {
       playSystemSound('error')
       setStatus('error')
       return
@@ -1072,7 +1090,7 @@ function Protocol02Screen({ onSuccess }: { onSuccess: () => void }) {
     event.preventDefault()
     playSystemSound('click')
 
-    if (answer.trim().toLowerCase() !== '4ce792') {
+    if (normalizeAnswer(answer) !== '4CE792') {
       playSystemSound('error')
       setStatus('error')
       return
@@ -1170,7 +1188,7 @@ function Protocol03Screen({ onSuccess }: { onSuccess: () => void }) {
     event.preventDefault()
     playSystemSound('click')
 
-    if (answer.trim() !== '739') {
+    if (normalizeAnswer(answer) !== '739') {
       playSystemSound('error')
       setStatus('error')
       return
@@ -1215,7 +1233,7 @@ function Protocol03Screen({ onSuccess }: { onSuccess: () => void }) {
               Ask exactly one question.
             </p>
             <p className="mt-3 text-xs leading-6 tracking-[0.12em] text-terminal-500/80">
-              "What is Monsterek?"
+              "Co to jest monsterek?"
             </p>
           </div>
         </div>
@@ -1301,7 +1319,7 @@ function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
     event.preventDefault()
     playSystemSound('click')
 
-    if (answer.trim() !== '672') {
+    if (normalizeAnswer(answer) !== '672') {
       triggerHapticError()
       return
     }
@@ -1341,7 +1359,7 @@ function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
             </p>
             <p className="mt-4 text-xs leading-6 tracking-[0.14em] text-flossa-white/62">
               You have been coding<br />
-              for 9 hours.
+              for 19 hours.
             </p>
             <p className="mt-4 text-xs leading-6 tracking-[0.14em] text-flossa-white/62">
               Current time:<br />
@@ -1354,7 +1372,7 @@ function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
               Merge conflict detected.
             </p>
             <p className="terminal-type mt-4 max-w-max text-xs leading-6 tracking-[0.14em] text-flossa-white/72">
-              Choose the only valid option.
+              Choose the only valid option that will get you back on your feet.
             </p>
           </div>
         </div>
@@ -1368,7 +1386,7 @@ function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
           >
             A<br />
             <span className="text-terminal-500/70">if</span> (fatigue &gt; limit) {'{'}<br />
-            &nbsp;&nbsp;monster();<br />
+            &nbsp;&nbsp;MONSTER_NITRO();<br />
             {'}'}
           </button>
           <button
@@ -2073,8 +2091,8 @@ const bugPurgeBugCount = 7
 const bugPurgeDamage = 10
 const bugPurgeMinHp = 10
 const bugPurgeTargetHits = 9
-const bugPurgeBugSpeed = 74
-const bugPurgeShotInterval = 1.35
+const bugPurgeBugSpeed = 165
+const bugPurgeShotInterval = 0.82
 const bugPurgeInitialBugs: BugTarget[] = Array.from({ length: bugPurgeBugCount }, (_, index) => ({
   id: index,
   x: 14 + ((index * 27) % 72),
@@ -2172,6 +2190,7 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
     window.localStorage.setItem(bugPurgeStorageKey, 'true')
     window.localStorage.setItem(bugPurgeHpStorageKey, bugPurgeMinHp.toString())
     playSystemSound('success')
+    playLocalAudio(bugPurgeCompleteAudio, 0.9)
   }, [damageHits, eliminated, isComplete])
 
   function startResidualAttack() {
@@ -2209,7 +2228,8 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
       return
     }
 
-    playSystemSound('click')
+    startAmbientSound()
+    playLocalAudio(bugGunshotAudio, 0.62)
     window.navigator.vibrate?.(18)
     setShotPulse((pulse) => pulse + 1)
 
@@ -2227,7 +2247,7 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
         continue
       }
 
-      if (Math.hypot(bug.x - x, bug.y - y) <= 8.5) {
+      if (Math.hypot(bug.x - x, bug.y - y) <= 6.4) {
         hitBugId = bug.id
         break
       }
@@ -2276,8 +2296,8 @@ function BugPurgeScreen({ onComplete }: { onComplete: () => void }) {
             return bug
           }
 
-          let nextX = bug.x + (bug.vx * deltaSeconds) / 5
-          let nextY = bug.y + (bug.vy * deltaSeconds) / 5
+          let nextX = bug.x + (bug.vx * deltaSeconds) / 3.8
+          let nextY = bug.y + (bug.vy * deltaSeconds) / 3.8
           let nextVx = bug.vx
           let nextVy = bug.vy
           let nextCooldown = bug.shotCooldown - deltaSeconds
@@ -2451,7 +2471,7 @@ function Protocol05Screen({ onSuccess }: { onSuccess: () => void }) {
     event.preventDefault()
     playSystemSound('click')
 
-    if (answer.trim() !== 'ROOT_ACCESS_CHRABĄSZCZ') {
+    if (normalizeAnswer(answer) !== 'ROOT_ACCESS_CHRABĄSZCZ') {
       playSystemSound('error')
       setStatus('error')
       return
@@ -2476,6 +2496,11 @@ function Protocol05Screen({ onSuccess }: { onSuccess: () => void }) {
           </p>
           <p className="mt-5 text-xs leading-6 tracking-[0.16em] text-flossa-white/56">
             Recover<br />the Master Password.
+          </p>
+          <p className="mt-5 text-[11px] leading-6 tracking-[0.16em] text-terminal-500/75">
+            An envelope marked<br />
+            ROOT ACCESS<br />
+            is waiting for you.
           </p>
         </div>
 
@@ -2542,7 +2567,7 @@ function Protocol06Screen({ onSuccess }: { onSuccess: () => void }) {
     event.preventDefault()
     playSystemSound('click')
 
-    if (answer.trim() !== '997') {
+    if (normalizeAnswer(answer) !== '997') {
       playSystemSound('error')
       setStatus('error')
       return
@@ -2569,9 +2594,13 @@ function Protocol06Screen({ onSuccess }: { onSuccess: () => void }) {
             Biometric verification required.
           </p>
           <p className="mt-4 text-xs leading-6 tracking-[0.16em] text-flossa-white/56">
-            Use UV light<br />
-            to inspect the guard's<br />
-            left forearm.
+            Someone at this party<br />
+            has the final code.
+          </p>
+          <p className="mt-4 text-xs leading-6 tracking-[0.16em] text-terminal-500/75">
+            The code is located<br />
+            on the left forearm<br />
+            of the Repository Guardian.
           </p>
         </div>
 

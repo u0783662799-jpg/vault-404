@@ -955,15 +955,15 @@
 .bug-target {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 42px;
+  width: 34px;
+  height: 30px;
   border: 1px solid rgb(255 70 70 / 0.64);
   border-radius: 48% 52% 42% 58%;
   background:
     radial-gradient(circle at 35% 35%, rgb(255 255 255 / 0.22), transparent 16%),
     radial-gradient(circle at 50% 54%, rgb(255 70 70 / 0.9), rgb(62 7 12 / 0.9) 72%);
   color: rgb(255 210 210);
-  font-size: 8px;
+  font-size: 7px;
   letter-spacing: 0.16em;
   text-shadow: 0 0 8px rgb(255 64 64 / 0.7);
   transform: translate(-50%, -50%);
@@ -976,7 +976,7 @@
   content: "";
   position: absolute;
   top: 50%;
-  width: 16px;
+  width: 11px;
   height: 1px;
   background: rgb(255 92 92 / 0.78);
   box-shadow:
@@ -985,12 +985,12 @@
 }
 
 .bug-target::before {
-  left: -14px;
+  left: -10px;
   transform: rotate(-15deg);
 }
 
 .bug-target::after {
-  right: -14px;
+  right: -10px;
   transform: rotate(15deg);
 }
 
