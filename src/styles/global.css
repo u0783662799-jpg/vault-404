@@ -1111,9 +1111,14 @@
   bottom: 96px;
   width: 52px;
   height: 62px;
-  border: 1px solid rgb(57 255 20 / 0.46);
-  background: linear-gradient(90deg, rgb(57 255 20 / 0.08), rgb(57 255 20 / 0.22), rgb(57 255 20 / 0.08));
-  box-shadow: inset 0 0 18px rgb(57 255 20 / 0.1);
+  border: 2px solid rgb(57 255 20 / 0.74);
+  background:
+    linear-gradient(90deg, rgb(6 35 25), rgb(22 130 72), rgb(6 35 25)),
+    rgb(16 92 55);
+  box-shadow:
+    inset 0 0 0 4px rgb(4 18 14 / 0.72),
+    inset 0 0 22px rgb(57 255 20 / 0.26),
+    0 0 18px rgb(57 255 20 / 0.18);
 }
 
 .core-run-obstacle-pipe::before {
@@ -1123,8 +1128,22 @@
   right: -6px;
   top: -12px;
   height: 14px;
-  border: 1px solid rgb(57 255 20 / 0.5);
-  background: rgb(57 255 20 / 0.14);
+  border: 2px solid rgb(57 255 20 / 0.78);
+  background:
+    linear-gradient(90deg, rgb(5 31 23), rgb(30 160 86), rgb(5 31 23)),
+    rgb(17 102 60);
+  box-shadow:
+    inset 0 0 0 3px rgb(4 18 14 / 0.7),
+    0 0 16px rgb(57 255 20 / 0.18);
+}
+
+.core-run-obstacle-pipe::after {
+  content: "";
+  position: absolute;
+  inset: 11px 14px 8px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgb(95 255 135 / 0.42), rgb(5 36 22 / 0.7));
+  opacity: 0.85;
 }
 
 .core-run-flag {

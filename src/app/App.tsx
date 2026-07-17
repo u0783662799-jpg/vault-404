@@ -1293,7 +1293,7 @@ const coreRunObstacles: CoreRunObstacle[] = [
   { id: 4, x: 196, kind: 'bug' },
 ]
 const coreRunFinishX = 235
-const coreRunDurationMs = 28000
+const coreRunDurationMs = 12200
 const coreRunSpeed = coreRunFinishX / (coreRunDurationMs / 1000)
 const coreRunJumpDurationMs = 820
 
@@ -1336,6 +1336,8 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
   const lastFrameRef = useRef<number | null>(null)
   const progressRef = useRef(0)
   const jumpStartedAtRef = useRef<number | null>(null)
+  const jumpBoostRef = useRef(1)
+  const doubleJumpUsedRef = useRef(false)
   const collectedRef = useRef<number[]>([])
   const clearedObstaclesRef = useRef<number[]>([])
   const modeRef = useRef<CoreRunMode>('running')
@@ -1354,6 +1356,8 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
     startCoreRunMusic()
     progressRef.current = 0
     jumpStartedAtRef.current = null
+    jumpBoostRef.current = 1
+    doubleJumpUsedRef.current = false
     collectedRef.current = []
     clearedObstaclesRef.current = []
     modeRef.current = 'running'
@@ -1399,7 +1403,17 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
 
     if (jumpPower < 0.08) {
       jumpStartedAtRef.current = performance.now()
+      jumpBoostRef.current = 1
+      doubleJumpUsedRef.current = false
       playSystemSound('click')
+      return
+    }
+
+    if (!doubleJumpUsedRef.current && jumpPower > 0.16) {
+      jumpStartedAtRef.current = performance.now() - coreRunJumpDurationMs * 0.18
+      jumpBoostRef.current = 1.62
+      doubleJumpUsedRef.current = true
+      playSystemSound('beep')
     }
   }
 
@@ -1419,8 +1433,9 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
           const jumpAge = timestamp - jumpStartedAtRef.current
           if (jumpAge >= coreRunJumpDurationMs) {
             jumpStartedAtRef.current = null
+            jumpBoostRef.current = 1
           } else {
-            nextJumpPower = Math.sin((jumpAge / coreRunJumpDurationMs) * Math.PI)
+            nextJumpPower = Math.sin((jumpAge / coreRunJumpDurationMs) * Math.PI) * jumpBoostRef.current
           }
         }
         setJumpPower(nextJumpPower)
@@ -1468,7 +1483,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
             return
           }
 
-          if (nextJumpPower > 0.34) {
+          if (nextJumpPower > 1.08) {
             clearedObstaclesRef.current = [...clearedObstaclesRef.current, obstacle.id]
             setClearedObstacles(clearedObstaclesRef.current)
             return
@@ -1509,7 +1524,7 @@ function CoreRunScreen({ onComplete }: { onComplete: () => void }) {
         <div className="mb-3">
           <div className="flex items-center justify-between text-[10px] tracking-[0.22em] text-flossa-white/52">
             <span>CORE RUN</span>
-            <span>{Math.min(28, Math.floor(progress / coreRunSpeed))}S / 28S</span>
+            <span>{Math.min(13, Math.floor(progress / coreRunSpeed))}S / 13S</span>
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-[0.16em] text-terminal-500">CORE RUN</h1>
           <div className="mt-3 flex items-center justify-between text-[10px] tracking-[0.16em] text-flossa-white/62">
