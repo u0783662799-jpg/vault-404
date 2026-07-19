@@ -976,20 +976,15 @@ function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
     }
   }
 
-  async function replayAudio() {
-    if (!audioRef.current) {
-      return
-    }
-
+  function skipAudio() {
     playSystemSound('click')
-    audioRef.current.currentTime = 0
-
-    try {
-      await audioRef.current.play()
-      setIsPlaying(true)
-    } catch {
-      setIsPlaying(false)
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
     }
+    setIsPlaying(false)
+    setHasEnded(true)
+    window.localStorage.setItem(secureMessageStorageKey, 'true')
   }
 
   function pauseAudio() {
@@ -1166,14 +1161,15 @@ function SecureMessageScreen({ onContinue }: { onContinue: () => void }) {
                 disabled={!isPlaying}
                 className="h-12 border border-flossa-white/12 bg-flossa-black/70 px-3 text-[11px] font-semibold tracking-[0.18em] text-flossa-white/64 transition hover:border-flossa-white/30 focus:outline-none focus:ring-2 focus:ring-terminal-500/20 disabled:opacity-40"
               >
-                PAUSE
+                PAUZA
               </button>
               <button
                 type="button"
-                onClick={replayAudio}
+                onClick={skipAudio}
+                disabled={hasEnded}
                 className="h-12 border border-terminal-500/35 bg-flossa-black/70 px-3 text-[11px] font-semibold tracking-[0.18em] text-terminal-500/80 transition hover:border-terminal-500 focus:outline-none focus:ring-2 focus:ring-terminal-500/20"
               >
-                REPLAY
+                POMIŃ
               </button>
             </div>
 
@@ -1213,7 +1209,7 @@ function Protocol01Screen({ onSuccess }: { onSuccess: () => void }) {
     event.preventDefault()
     playSystemSound('click')
 
-    if (normalizeAnswer(answer) !== 'V404-2718') {
+    if (normalizeAnswer(answer) !== 'KAJAKI') {
       playSystemSound('error')
       setStatus('error')
       return
@@ -1301,7 +1297,7 @@ function Protocol02Screen({ onSuccess }: { onSuccess: () => void }) {
     event.preventDefault()
     playSystemSound('click')
 
-    if (normalizeAnswer(answer) !== '4CE792') {
+    if (normalizeAnswer(answer) !== 'KAJAKI') {
       playSystemSound('error')
       setStatus('error')
       return
@@ -1784,7 +1780,7 @@ function Protocol03Screen({ onSuccess }: { onSuccess: () => void }) {
     event.preventDefault()
     playSystemSound('click')
 
-    if (normalizeAnswer(answer) !== '739') {
+    if (normalizeAnswer(answer) !== 'KAJAKI') {
       playSystemSound('error')
       setStatus('error')
       return
@@ -1857,9 +1853,9 @@ function Protocol03Screen({ onSuccess }: { onSuccess: () => void }) {
               autoComplete="one-time-code"
               autoCorrect="off"
               spellCheck={false}
-              inputMode="numeric"
-              maxLength={3}
-              placeholder="000"
+              inputMode="text"
+              maxLength={12}
+              placeholder=""
               className="h-14 w-full border border-terminal-500/35 bg-flossa-black/80 px-4 text-center text-base font-semibold tracking-[0.38em] text-terminal-500 outline-none shadow-[inset_0_0_24px_rgb(57_255_20_/_0.08)] transition placeholder:text-terminal-500/20 focus:border-terminal-500 focus:ring-2 focus:ring-terminal-500/30 disabled:opacity-70"
             />
           </label>
@@ -1921,7 +1917,7 @@ function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
     event.preventDefault()
     playSystemSound('click')
 
-    if (normalizeAnswer(answer) !== '672') {
+    if (normalizeAnswer(answer) !== 'KAJAKI') {
       triggerHapticError()
       return
     }
@@ -2047,9 +2043,9 @@ function Protocol04Screen({ onSuccess }: { onSuccess: () => void }) {
                 autoComplete="one-time-code"
                 autoCorrect="off"
                 spellCheck={false}
-                inputMode="numeric"
-                maxLength={3}
-                placeholder="000"
+                inputMode="text"
+                maxLength={12}
+                placeholder=""
                 className="h-14 w-full border border-terminal-500/35 bg-flossa-black/80 px-4 text-center text-base font-semibold tracking-[0.38em] text-terminal-500 outline-none shadow-[inset_0_0_24px_rgb(57_255_20_/_0.08)] transition placeholder:text-terminal-500/20 focus:border-terminal-500 focus:ring-2 focus:ring-terminal-500/30 disabled:opacity-70"
               />
             </label>
@@ -3079,7 +3075,7 @@ function Protocol05Screen({ onSuccess }: { onSuccess: () => void }) {
     event.preventDefault()
     playSystemSound('click')
 
-    if (normalizeAnswer(answer) !== 'ROOT_ACCESS_CHRABĄSZCZ') {
+    if (normalizeAnswer(answer) !== 'KAJAKI') {
       playSystemSound('error')
       setStatus('error')
       return
@@ -3175,7 +3171,7 @@ function Protocol06Screen({ onSuccess }: { onSuccess: () => void }) {
     event.preventDefault()
     playSystemSound('click')
 
-    if (normalizeAnswer(answer) !== '997') {
+    if (normalizeAnswer(answer) !== 'KAJAKI') {
       playSystemSound('error')
       setStatus('error')
       return
@@ -3229,9 +3225,9 @@ function Protocol06Screen({ onSuccess }: { onSuccess: () => void }) {
               autoComplete="one-time-code"
               autoCorrect="off"
               spellCheck={false}
-              inputMode="numeric"
-              maxLength={3}
-              placeholder="000"
+              inputMode="text"
+              maxLength={12}
+              placeholder=""
               className="h-14 w-full border border-terminal-500/35 bg-flossa-black/80 px-4 text-center text-base font-semibold tracking-[0.38em] text-terminal-500 outline-none shadow-[inset_0_0_24px_rgb(57_255_20_/_0.08)] transition placeholder:text-terminal-500/20 focus:border-terminal-500 focus:ring-2 focus:ring-terminal-500/30 disabled:opacity-70"
             />
           </label>
